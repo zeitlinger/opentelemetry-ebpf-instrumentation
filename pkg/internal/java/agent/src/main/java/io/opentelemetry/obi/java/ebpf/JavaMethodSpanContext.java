@@ -27,6 +27,34 @@ public final class JavaMethodSpanContext {
     }
   }
 
+  /** Scratch proof: snapshot the active native method stack for a submitted task. */
+  public static void captureTask(int taskId) {
+    if (!ThreadInfo.onVirtualThread()) {
+      emitTask(OperationType.JAVA_METHOD_TASK_CAPTURE, taskId);
+    }
+  }
+
+  /** Scratch proof: install a captured method stack on the task worker. */
+  public static void enterTask(int taskId) {
+    if (!ThreadInfo.onVirtualThread()) {
+      emitTask(OperationType.JAVA_METHOD_TASK_ENTER, taskId);
+    }
+  }
+
+  /** Scratch proof: restore the task worker's prior method stack. */
+  public static void exitTask(int taskId) {
+    if (!ThreadInfo.onVirtualThread()) {
+      emitTask(OperationType.JAVA_METHOD_TASK_EXIT, taskId);
+    }
+  }
+
+  private static void emitTask(OperationType operation, int taskId) {
+    NativeMemory packet = PACKET.get();
+    packet.setByte(0, operation.code);
+    packet.setInt(1, taskId);
+    Agent.NativeLib.ioctl(0, Agent.IOCTL_CMD, packet.getAddress());
+  }
+
   private static void emit(OperationType operation, int methodId, boolean exceptional) {
     NativeMemory packet = PACKET.get();
     packet.setByte(0, operation.code);

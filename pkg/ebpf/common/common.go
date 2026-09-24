@@ -102,7 +102,8 @@ const (
 	EventTypePythonRuntimeMetric   = uint8(BpfEventTypeK_eventTypePythonRuntimeMetrics)   // Python GC counters
 	EventTypeJVMRuntimeMetrics     = uint8(BpfEventTypeK_eventTypeJvmRuntimeMetrics)      // JVM runtime metrics
 	EventTypeNodejsResource        = uint8(BpfEventTypeK_eventTypeNodejsResource)
-	EventTypeJVMGCDuration         = uint8(BpfEventTypeK_eventTypeJvmGcDuration) // JVM garbage-collection duration
+	EventTypeJVMGCDuration         = uint8(BpfEventTypeK_eventTypeJvmGcDuration)  // JVM garbage-collection duration
+	EventTypeJavaMethodSpan        = uint8(BpfEventTypeK_eventTypeJavaMethodSpan) // test-only Java method span
 )
 
 // Kernel-side classification. These alias the bpf2go-generated constants

@@ -17,6 +17,7 @@
 #include <common/trace_parent.h>
 
 #include <generictracer/jvm.h>
+#include <generictracer/types/java_method.h>
 #include <generictracer/k_tracer_defs.h>
 #include <generictracer/maps/pid_tid_to_conn.h>
 
@@ -25,6 +26,7 @@
 #include <maps/active_ssl_connections.h>
 #include <maps/java_tasks.h>
 #include <maps/java_vt_threads.h>
+#include <maps/java_method_spans.h>
 
 #include <pid/pid.h>
 
@@ -39,6 +41,11 @@ enum {
     k_ioctl_java_vt_unmount = 5, // virtual thread unmounted from this carrier
     k_ioctl_java_runtime_metrics = 6,
     k_ioctl_java_gc_duration = 7,
+    k_ioctl_java_method_enter = 8,
+    k_ioctl_java_method_exit = 9,
+    k_ioctl_java_method_task_capture = 10,
+    k_ioctl_java_method_task_enter = 11,
+    k_ioctl_java_method_task_exit = 12,
 };
 
 enum { k_ioctl_invalid_op = 0xff };
@@ -55,6 +62,189 @@ static __always_inline u8 cmd_to_op(u8 cmd) {
     default:
         return k_ioctl_invalid_op;
     }
+}
+
+static __always_inline void java_method_span_event(const java_method_frame_t *frame,
+                                                   const u32 method_id,
+                                                   const u8 exceptional,
+                                                   const u64 end_ns,
+                                                   const u64 id) {
+    java_method_event_t *event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+    if (!event) {
+        return;
+    }
+
+    bpf_memset(event, 0, sizeof(*event));
+    event->type = k_event_type_java_method_span;
+    event->start_ns = frame->tp.ts;
+    event->end_ns = end_ns;
+    event->global_pid = pid_from_pid_tgid(id);
+    event->global_tid = tid_from_pid_tgid(id);
+    event->method_id = method_id;
+    bpf_memcpy(event->trace_id, frame->tp.trace_id, TRACE_ID_SIZE_BYTES);
+    bpf_memcpy(event->span_id, frame->tp.span_id, SPAN_ID_SIZE_BYTES);
+    bpf_memcpy(event->parent_span_id, frame->tp.parent_id, SPAN_ID_SIZE_BYTES);
+    event->trace_flags = frame->tp.flags;
+    event->exceptional = exceptional;
+
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    int ns_pid = 0;
+    int ns_ppid = 0;
+    ns_pid_ppid(task, &ns_pid, &ns_ppid, &event->pid_ns_id);
+    event->ns_pid = (u32)ns_pid;
+    event->ns_tid = get_task_tid();
+    bpf_ringbuf_submit(event, get_flags());
+}
+
+static __always_inline void java_method_span_op(const u8 op, unsigned char *uarg, const u64 id) {
+    u32 method_id = 0;
+    if (bpf_probe_read_user(&method_id, sizeof(method_id), uarg + 1) != 0) {
+        return;
+    }
+
+    java_method_stack_t *stack = bpf_map_lookup_elem(&java_method_spans, &id);
+    if (op == k_ioctl_java_method_enter) {
+        if (!stack) {
+            java_method_stack_t empty = {};
+            if (bpf_map_update_elem(&java_method_spans, &id, &empty, BPF_NOEXIST) != 0) {
+                return;
+            }
+            stack = bpf_map_lookup_elem(&java_method_spans, &id);
+            if (!stack) {
+                return;
+            }
+        }
+
+        if (stack->depth > k_java_method_span_max_depth) {
+            bpf_map_delete_elem(&java_method_spans, &id);
+            return;
+        }
+        if (stack->overflow_depth > 0 || stack->depth == k_java_method_span_max_depth) {
+            stack->overflow_depth++;
+            return;
+        }
+
+        const u32 depth = stack->depth;
+        tp_info_t parent = {};
+        if (depth > 0) {
+            const u32 parent_index = (depth - 1) & (k_java_method_span_max_depth - 1);
+            parent = stack->frames[parent_index].tp;
+        } else {
+            trace_key_t t_key = {0};
+            trace_key_from_pid_tid(&t_key);
+            tp_info_pid_t *server_tp = find_parent_java_trace(&t_key);
+            if (!server_tp || !server_tp->valid) {
+                bpf_map_delete_elem(&java_method_spans, &id);
+                return;
+            }
+            parent = server_tp->tp;
+        }
+        if (!valid_trace(parent.trace_id)) {
+            bpf_map_delete_elem(&java_method_spans, &id);
+            return;
+        }
+
+        const u32 frame_index = depth & (k_java_method_span_max_depth - 1);
+        java_method_frame_t *frame = &stack->frames[frame_index];
+        bpf_memset(frame, 0, sizeof(*frame));
+        bpf_memcpy(frame->tp.trace_id, parent.trace_id, TRACE_ID_SIZE_BYTES);
+        bpf_memcpy(frame->tp.parent_id, parent.span_id, SPAN_ID_SIZE_BYTES);
+        frame->tp.ts = bpf_ktime_get_ns();
+        frame->tp.flags = parent.flags;
+        urand_bytes(frame->tp.span_id, SPAN_ID_SIZE_BYTES);
+        if (!should_be_in_same_transaction(&parent, &frame->tp)) {
+            bpf_map_delete_elem(&java_method_spans, &id);
+            return;
+        }
+        frame->method_id = method_id;
+        stack->depth = depth + 1;
+        return;
+    }
+
+    u8 exceptional = 0;
+    if (bpf_probe_read_user(&exceptional, sizeof(exceptional), uarg + 1 + sizeof(method_id)) != 0 ||
+        !stack) {
+        return;
+    }
+    if (stack->overflow_depth > 0) {
+        stack->overflow_depth--;
+        if (stack->overflow_depth == 0 && stack->depth == 0) {
+            bpf_map_delete_elem(&java_method_spans, &id);
+        }
+        return;
+    }
+    const u32 depth = stack->depth;
+    if (depth == 0 || depth > k_java_method_span_max_depth) {
+        bpf_map_delete_elem(&java_method_spans, &id);
+        return;
+    }
+    const u32 frame_index = (depth - 1) & (k_java_method_span_max_depth - 1);
+    if (stack->frames[frame_index].method_id != method_id) {
+        bpf_map_delete_elem(&java_method_spans, &id);
+        return;
+    }
+
+    const u64 end_ns = bpf_ktime_get_ns();
+    const java_method_frame_t completed = stack->frames[frame_index];
+    stack->depth = depth - 1;
+    java_method_span_event(&completed, method_id, exceptional, end_ns, id);
+    if (stack->depth == 0) {
+        bpf_map_delete_elem(&java_method_spans, &id);
+    }
+}
+
+// Scratch proof only: capture a method stack by task identity at submission,
+// install it on the worker for Runnable.run(), and restore that worker's
+// prior stack on exit. This intentionally uses identityHashCode and supports
+// one active task scope per worker; production needs collision/reuse and
+// nested-scope semantics.
+static __always_inline void java_method_task_op(const u8 op, unsigned char *uarg, const u64 id) {
+    u32 task_id = 0;
+    if (bpf_probe_read_user(&task_id, sizeof(task_id), uarg + 1) != 0) {
+        return;
+    }
+    const u64 task_key = ((u64)pid_from_pid_tgid(id) << 32) | task_id;
+    if (op == k_ioctl_java_method_task_capture) {
+        java_method_stack_t *current = bpf_map_lookup_elem(&java_method_spans, &id);
+        if (current) {
+            bpf_map_update_elem(&java_method_task_contexts, &task_key, current, BPF_ANY);
+        } else {
+            java_method_stack_t empty = {};
+            bpf_map_update_elem(&java_method_task_contexts, &task_key, &empty, BPF_ANY);
+        }
+        return;
+    }
+
+    if (op == k_ioctl_java_method_task_enter) {
+        java_method_stack_t *captured = bpf_map_lookup_elem(&java_method_task_contexts, &task_key);
+        if (!captured) {
+            return;
+        }
+        java_method_stack_t *current = bpf_map_lookup_elem(&java_method_spans, &id);
+        if (current) {
+            bpf_map_update_elem(&java_method_task_backups, &id, current, BPF_ANY);
+        } else {
+            java_method_stack_t empty = {};
+            bpf_map_update_elem(&java_method_task_backups, &id, &empty, BPF_ANY);
+        }
+        if (captured->depth > 0 || captured->overflow_depth > 0) {
+            bpf_map_update_elem(&java_method_spans, &id, captured, BPF_ANY);
+        } else {
+            bpf_map_delete_elem(&java_method_spans, &id);
+        }
+        return;
+    }
+
+    java_method_stack_t *backup = bpf_map_lookup_elem(&java_method_task_backups, &id);
+    if (backup) {
+        if (backup->depth > 0 || backup->overflow_depth > 0) {
+            bpf_map_update_elem(&java_method_spans, &id, backup, BPF_ANY);
+        } else {
+            bpf_map_delete_elem(&java_method_spans, &id);
+        }
+        bpf_map_delete_elem(&java_method_task_backups, &id);
+    }
+    bpf_map_delete_elem(&java_method_task_contexts, &task_key);
 }
 
 SEC("kprobe/sys_ioctl")
@@ -232,6 +422,15 @@ int BPF_KPROBE_GUARDED(obi_kprobe_sys_ioctl) {
         bpf_ringbuf_submit(event, get_flags());
         return 0;
     }
+    case k_ioctl_java_method_enter:
+    case k_ioctl_java_method_exit:
+        java_method_span_op(op_cmd, uarg, id);
+        return 0;
+    case k_ioctl_java_method_task_capture:
+    case k_ioctl_java_method_task_enter:
+    case k_ioctl_java_method_task_exit:
+        java_method_task_op(op_cmd, uarg, id);
+        return 0;
     default:
         break;
     }
@@ -305,5 +504,13 @@ int BPF_KPROBE_GUARDED(obi_kprobe_sys_ioctl) {
         handle_buf_with_connection(ctx, &p_conn, buf, max_len, WITH_SSL, op, orig_dport, 0);
     }
 
+    return 0;
+}
+
+SEC("tracepoint/sched/sched_process_exit")
+int obi_java_method_scope_cleanup(void *ctx) {
+    (void)ctx;
+    const u64 id = bpf_get_current_pid_tgid();
+    bpf_map_delete_elem(&java_method_spans, &id);
     return 0;
 }

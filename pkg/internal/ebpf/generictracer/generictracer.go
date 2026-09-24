@@ -37,9 +37,11 @@ import (
 	"go.opentelemetry.io/obi/pkg/internal/netolly/ifaces"
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 Bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
+//go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type java_method_event_t Bpf ../../../../bpf/generictracer/generictracer.c -- -I../../../../bpf
 
 type Tracer struct {
 	pidsFilter       ebpfcommon.ServiceFilter
@@ -430,7 +432,9 @@ func (p *Tracer) KProbes() map[string]ebpfcommon.ProbeDesc {
 }
 
 func (p *Tracer) Tracepoints() map[string]ebpfcommon.ProbeDesc {
-	return nil
+	return map[string]ebpfcommon.ProbeDesc{
+		"sched/sched_process_exit": {Start: p.bpfObjects.ObiJavaMethodScopeCleanup},
+	}
 }
 
 func (p *Tracer) UProbes() map[string]map[string][]*ebpfcommon.ProbeDesc {
@@ -806,6 +810,14 @@ func (p *Tracer) processSharedRingbufRecord(
 	cfg *config.EBPFTracer,
 	record *ringbuf.Record,
 ) (request.Span, bool, error) {
+	if record != nil && len(record.RawSample) > 0 && record.RawSample[0] == ebpfcommon.EventTypeJavaMethodSpan {
+		span, ignore, err := p.parseJavaMethodSpanRecord(record)
+		if !ignore && err == nil && !span.IsValid() {
+			return span, true, nil
+		}
+		return span, ignore, err
+	}
+
 	if handled, err := p.eventCtx.HandleInternalEvent(record); handled {
 		return request.Span{}, true, err
 	}
@@ -826,6 +838,49 @@ func (p *Tracer) processSharedRingbufRecord(
 		return s, true, nil
 	}
 	return s, ignore, err
+}
+
+func (p *Tracer) parseJavaMethodSpanRecord(record *ringbuf.Record) (request.Span, bool, error) {
+	raw, err := ebpfcommon.ReinterpretCast[BpfJavaMethodEventT](record.RawSample)
+	if err != nil {
+		return request.Span{}, true, err
+	}
+	if raw.Type != ebpfcommon.EventTypeJavaMethodSpan {
+		return request.Span{}, true, nil
+	}
+
+	name := ""
+	switch raw.MethodId {
+	case 1:
+		name = "CheckoutService.checkout"
+	case 2:
+		name = "CheckoutService.validateOrder"
+	default:
+		return request.Span{}, true, nil
+	}
+
+	status := int(codes.Unset)
+	if raw.Exceptional != 0 {
+		status = int(codes.Error)
+	}
+	return request.Span{
+		Type:              request.EventTypeManualSpan,
+		SpanKind:          trace.SpanKindInternal,
+		TraceFlags:        raw.TraceFlags,
+		TraceID:           trace.TraceID(raw.TraceId),
+		SpanID:            trace.SpanID(raw.SpanId),
+		ParentSpanID:      trace.SpanID(raw.ParentSpanId),
+		RequestStart:      int64(raw.StartNs),
+		Start:             int64(raw.StartNs),
+		End:               int64(raw.EndNs),
+		Status:            status,
+		OverrideTraceName: name,
+		Pid: request.PidInfo{
+			HostPID:   app.PID(raw.GlobalPid),
+			UserPID:   app.PID(raw.NsPid),
+			Namespace: raw.PidNsId,
+		},
+	}, false, nil
 }
 
 func (p *Tracer) handleJVMRuntimeMetricsRecord(

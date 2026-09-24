@@ -173,6 +173,8 @@ public class Agent {
         .transform(JavaForkJoinTaskInst.transformer())
         .type(VirtualThreadInst.type())
         .transform(VirtualThreadInst.transformer())
+        .type(JavaMethodSpanInst.type())
+        .transform(JavaMethodSpanInst.transformer())
         .installOn(inst);
 
     if (optEnabled(opts, "runtimeMetrics")) {
@@ -242,6 +244,7 @@ public class Agent {
     Class.forName(ProxyInputStream.class.getName());
     Class.forName(ConnectionInfo.class.getName());
     Class.forName(ThreadInfo.class.getName());
+    Class.forName(JavaMethodSpanContext.class.getName());
     Class.forName(IOCTLPacket.class.getName());
     Class.forName(OperationType.class.getName());
     Class.forName(Agent.class.getName());
@@ -312,6 +315,7 @@ public class Agent {
             io.opentelemetry.obi.java.ebpf.IOCTLPacket.class.getName(),
             io.opentelemetry.obi.java.ebpf.OperationType.class.getName(),
             io.opentelemetry.obi.java.ebpf.NativeMemory.class.getName(),
+            io.opentelemetry.obi.java.ebpf.JavaMethodSpanContext.class.getName(),
           }) {
         Class.forName(name, true, null);
       }

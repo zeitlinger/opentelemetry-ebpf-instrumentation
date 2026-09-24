@@ -22,6 +22,7 @@
 #include <maps/fd_map.h>
 #include <maps/fd_to_connection.h>
 #include <maps/java_tasks.h>
+#include <maps/java_method_spans.h>
 #include <maps/java_vt_threads.h>
 #include <maps/nginx_upstream.h>
 #include <maps/nodejs_fd_map.h>
@@ -375,6 +376,20 @@ find_trace_for_client_request_with_t_key(const pid_connection_info_t *p_conn,
                                          u64 pid_tgid,
                                          lw_thread_t lw_thread,
                                          tp_info_t *tp) {
+    const java_method_stack_t *method_stack = bpf_map_lookup_elem(&java_method_spans, &pid_tgid);
+    if (method_stack) {
+        const u32 method_depth = method_stack->depth;
+        if (method_depth > 0 && method_depth <= k_java_method_span_max_depth) {
+            const u32 top_index = (method_depth - 1) & (k_java_method_span_max_depth - 1);
+            const tp_info_t *method_tp = &method_stack->frames[top_index].tp;
+            if (valid_trace(method_tp->trace_id) && should_be_in_same_transaction(method_tp, tp)) {
+                __builtin_memcpy(tp->trace_id, method_tp->trace_id, sizeof(tp->trace_id));
+                __builtin_memcpy(tp->parent_id, method_tp->span_id, sizeof(tp->parent_id));
+                return k_parent_status_live;
+            }
+        }
+    }
+
     tp_info_pid_t *server_tp = find_parent_trace(p_conn, pid_tgid, lw_thread, t_key, orig_dport);
 
     if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {
@@ -418,6 +433,19 @@ find_parent_trace_for_client_request_with_t_key(const pid_connection_info_t *p_c
                                                 u64 pid_tgid,
                                                 lw_thread_t lw_thread,
                                                 tp_info_t *tp) {
+    const java_method_stack_t *method_stack = bpf_map_lookup_elem(&java_method_spans, &pid_tgid);
+    if (method_stack) {
+        const u32 method_depth = method_stack->depth;
+        if (method_depth > 0 && method_depth <= k_java_method_span_max_depth) {
+            const u32 top_index = (method_depth - 1) & (k_java_method_span_max_depth - 1);
+            const tp_info_t *method_tp = &method_stack->frames[top_index].tp;
+            if (valid_trace(method_tp->trace_id) && should_be_in_same_transaction(method_tp, tp)) {
+                *tp = *method_tp;
+                return k_parent_status_live;
+            }
+        }
+    }
+
     tp_info_pid_t *server_tp = find_parent_trace(p_conn, pid_tgid, lw_thread, t_key, orig_dport);
 
     if (server_tp && server_tp->valid && valid_trace(server_tp->tp.trace_id)) {

@@ -14,4 +14,6 @@
 #include "ruby.c"
 #include "python_runtime.c"
 
+const java_method_event_t *unused_java_method_event __attribute__((unused));
+
 char __license[] SEC("license") = "Dual MIT/GPL";

@@ -31,7 +31,59 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
 	"go.opentelemetry.io/obi/pkg/runtimemetrics"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+func TestParseJavaMethodSpanRecord(t *testing.T) {
+	event := BpfJavaMethodEventT{
+		Type:         ebpfcommon.EventTypeJavaMethodSpan,
+		StartNs:      100,
+		EndNs:        200,
+		GlobalPid:    10,
+		NsPid:        20,
+		PidNsId:      30,
+		MethodId:     2,
+		TraceId:      [16]byte{1, 2, 3},
+		SpanId:       [8]byte{4, 5},
+		ParentSpanId: [8]byte{6, 7},
+		TraceFlags:   1,
+		Exceptional:  1,
+	}
+	record := &ringbuf.Record{
+		RawSample: unsafe.Slice((*byte)(unsafe.Pointer(&event)), int(unsafe.Sizeof(event))),
+	}
+
+	span, ignore, err := (&Tracer{}).parseJavaMethodSpanRecord(record)
+	require.NoError(t, err)
+	require.False(t, ignore)
+	assert.Equal(t, request.EventTypeManualSpan, span.Type)
+	assert.Equal(t, trace.SpanKindInternal, span.SpanKind)
+	assert.Equal(t, "CheckoutService.validateOrder", span.OverrideTraceName)
+	assert.Equal(t, trace.TraceID(event.TraceId), span.TraceID)
+	assert.Equal(t, trace.SpanID(event.SpanId), span.SpanID)
+	assert.Equal(t, trace.SpanID(event.ParentSpanId), span.ParentSpanID)
+	assert.Equal(t, int(codes.Error), span.Status)
+	assert.Equal(t, int64(event.StartNs), span.Start)
+	assert.Equal(t, int64(event.EndNs), span.End)
+	assert.Equal(t, app.PID(event.GlobalPid), span.Pid.HostPID)
+	assert.Equal(t, app.PID(event.NsPid), span.Pid.UserPID)
+	assert.Equal(t, event.PidNsId, span.Pid.Namespace)
+}
+
+func TestParseJavaMethodSpanRecordRejectsMalformedAndUnknownMethod(t *testing.T) {
+	_, ignore, err := (&Tracer{}).parseJavaMethodSpanRecord(&ringbuf.Record{RawSample: []byte{33}})
+	assert.Error(t, err)
+	assert.True(t, ignore)
+
+	event := BpfJavaMethodEventT{MethodId: 99}
+	record := &ringbuf.Record{
+		RawSample: unsafe.Slice((*byte)(unsafe.Pointer(&event)), int(unsafe.Sizeof(event))),
+	}
+	_, ignore, err = (&Tracer{}).parseJavaMethodSpanRecord(record)
+	assert.NoError(t, err)
+	assert.True(t, ignore)
+}
 
 func TestBitPositionCalculation(t *testing.T) {
 	for _, v := range [][4]uint32{

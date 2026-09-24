@@ -6,6 +6,7 @@
 package io.opentelemetry.obi.java.instrumentations;
 
 import io.opentelemetry.obi.java.Agent;
+import io.opentelemetry.obi.java.ebpf.JavaMethodSpanContext;
 import io.opentelemetry.obi.java.ebpf.ThreadInfo;
 import io.opentelemetry.obi.java.instrumentations.data.SSLStorage;
 import java.util.Collection;
@@ -112,6 +113,9 @@ public class JavaExecutorInst {
       if (ThreadInfo.loomTaskOrVirtualThread(task)) {
         return;
       }
+      // Scratch-only: the existing thread mapping preserves request/server
+      // ancestry; snapshot the active method frames before the submitter exits.
+      JavaMethodSpanContext.captureTask(System.identityHashCode(task));
       long threadId = Agent.NativeLib.gettid();
       Long parentId = SSLStorage.parentThreadId(task);
       if (parentId != null) {

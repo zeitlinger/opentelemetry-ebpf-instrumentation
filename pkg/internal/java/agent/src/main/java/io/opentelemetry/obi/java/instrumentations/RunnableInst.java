@@ -6,6 +6,7 @@
 package io.opentelemetry.obi.java.instrumentations;
 
 import io.opentelemetry.obi.java.Agent;
+import io.opentelemetry.obi.java.ebpf.JavaMethodSpanContext;
 import io.opentelemetry.obi.java.ebpf.ThreadInfo;
 import io.opentelemetry.obi.java.instrumentations.data.SSLStorage;
 import net.bytebuddy.agent.builder.AgentBuilder;
@@ -40,6 +41,7 @@ public class RunnableInst {
       if (ThreadInfo.loomTaskOrVirtualThread(task)) {
         return;
       }
+      JavaMethodSpanContext.enterTask(System.identityHashCode(task));
       Long parentId = SSLStorage.parentThreadId(task);
       if (parentId != null) {
         long threadId = Agent.NativeLib.gettid();
@@ -57,6 +59,13 @@ public class RunnableInst {
         }
       }
       SSLStorage.untrackTask(task);
+    }
+
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void exit(@Advice.This Runnable task) {
+      if (!ThreadInfo.loomTaskOrVirtualThread(task)) {
+        JavaMethodSpanContext.exitTask(System.identityHashCode(task));
+      }
     }
   }
 }

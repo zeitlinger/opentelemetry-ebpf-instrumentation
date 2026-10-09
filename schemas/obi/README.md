@@ -23,14 +23,14 @@ here in the same change:
 - **An attribute upstream does not define**: declare it in the domain's
   `registry.yaml` under `registry.obi.<namespace>`.
 
-Then run `make lint-schema` and `make generate-schema-docs`, and make sure an
+Then run `mise run lint-schema` and `mise run generate-schema-docs`, and make sure an
 integration suite that runs weaver exercises the new telemetry (see below).
 
 ## What validation covers
 
 Checked on every change, without running OBI:
 
-- `make lint-schema`: the registry resolves and is well-formed.
+- `mise run lint-schema`: the registry resolves and is well-formed.
 - `internal/schemacheck`: every signal attribute declares a requirement level;
   the span attributes the exporter emits for each case in
   `emitted_contract_test.go` match their `span.obi.*` group exactly; OBI's
@@ -90,7 +90,7 @@ Until weaver defines local-wins override semantics, every override in
    live-check resolves it. Each expected duplicate is allowlisted — tightly,
    by attribute id and group pair — in `scripts/lint-schema-filter.jq`
    (covered by `scripts/lint_schema_filter_test.go`). Anything else still
-   fails `make lint-schema`.
+   fails `mise run lint-schema`.
 
 ## Group ids
 

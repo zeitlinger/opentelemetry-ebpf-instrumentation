@@ -6,7 +6,7 @@ ARG BUILDARCH=amd64
 COPY --from=gradle:9.8.0-jdk21-noble@sha256:0076fefe482103cf751a047aae94ba3b1db84e3893865125ecf8f14b6a02ec60 /opt/java/openjdk/include /opt/java/include
 WORKDIR /build
 COPY pkg/internal/java/agent/src/main/c/ src/main/c/
-COPY pkg/internal/java/agent/Makefile.jni Makefile.jni
+COPY pkg/internal/java/agent/build-jni.sh build-jni.sh
 
 # Install the cross compile toolchain
 RUN apt update
@@ -23,7 +23,7 @@ RUN case "$BUILDARCH" in \
       arm64) SLUG=linux-aarch64 ;; \
       *)     CC=gcc ;; \
     esac && \
-    make -f Makefile.jni CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+    CC=gcc JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG ./build-jni.sh
 
 # Cross-compile the other
 RUN case "$BUILDARCH" in \
@@ -33,7 +33,7 @@ RUN case "$BUILDARCH" in \
              SLUG=linux-amd64 ;; \
       *)     CC=gcc ;; \
     esac && \
-    make -f Makefile.jni CC=$CC JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG
+    JAVA_HOME=/opt/java JNI_HEADERS_DIR=src/main/c BUILD_DIR=build/jni/$SLUG TARGET_DIR=target/classes/native/$SLUG ./build-jni.sh
 
 # Build the Java OBI agent
 FROM gradle:9.8.0-jdk21-noble@sha256:0076fefe482103cf751a047aae94ba3b1db84e3893865125ecf8f14b6a02ec60 AS javaagent-builder
@@ -61,9 +61,14 @@ ENV GOARCH=$TARGETARCH
 
 WORKDIR /src
 
-RUN apk add make git bash
+RUN apk add --no-cache git bash make mise
 
-COPY go.mod go.sum ./
+ENV PATH="/usr/lib/llvm22/bin:${PATH}"
+ENV BPF2GO=/go/bin/bpf2go
+ENV CLANG=clang-22
+
+COPY go.mod go.sum mise.toml mise.lock ./
+RUN MISE_ENABLE_TOOLS=go mise install go
 # Cache module cache.
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
@@ -73,14 +78,16 @@ COPY internal/goabi/ internal/goabi/
 COPY internal/goversion/ internal/goversion/
 COPY internal/config/ internal/config/
 COPY pkg/ pkg/
-COPY Makefile ./
 COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/pkg/internal/java/embedded/obi-java-agent.jar
 
 # Build
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-	/generate.sh \
-	&& make compile RELEASE_VERSION=${RELEASE_VERSION} RELEASE_REVISION=${RELEASE_REVISION}
+	MISE_ENABLE_TOOLS=go mise exec -- make -f bpf/Makefile generate \
+	&& mkdir -p bin \
+	&& MISE_ENABLE_TOOLS=go mise exec -- env CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build \
+	  -ldflags="-X 'go.opentelemetry.io/obi/pkg/buildinfo.Version=${RELEASE_VERSION}' -X 'go.opentelemetry.io/obi/pkg/buildinfo.Revision=${RELEASE_REVISION}'" \
+	  -o bin/obi cmd/obi/main.go
 
 # Create final image from minimal + built binary
 FROM scratch

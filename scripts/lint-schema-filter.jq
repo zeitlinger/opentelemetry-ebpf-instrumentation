@@ -1,5 +1,5 @@
 # Filters `weaver registry check` JSON diagnostics down to the ones that must
-# fail `make lint-schema`, removing only the expected findings below. Weaver
+# fail `mise run lint-schema`, removing only the expected findings below. Weaver
 # has no first-class override mechanism between a registry and its
 # dependencies yet, nor a CLI flag to suppress the duplicate checks, while
 # `registry live-check` resolves each duplicate in the local group's favor.

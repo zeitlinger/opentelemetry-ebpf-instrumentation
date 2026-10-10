@@ -34,17 +34,18 @@ For a Go development environment with Docker access (especially useful for non-L
 see the [development container instructions](.devcontainer/README.md), including VS Code,
 IntelliJ IDEA, and terminal workflows.
 
-You can use [mise](https://mise.jdx.dev/) to install the Go and linting tools pinned
-in `mise.toml`:
+Use [mise](https://mise.jdx.dev/) to install the tools pinned in `mise.toml` and
+run the development tasks:
 
 ```sh
 mise install
+mise run format-go
+mise run lint-go
+mise run test-go
+mise run compile
 ```
 
-Mise is optional; `Make` remains the task runner. For example, run `mise run lint-go`
-to run the existing `make lint` target with the pinned tools available. Use
-`make docker-generate` for eBPF generation with the project's containerized
-toolchain.
+The task names and required tools are defined in `mise.toml` and `.mise/tasks/`.
 
 ### Compiling the project
 
@@ -59,25 +60,25 @@ In addition, use the latest versions of the following components:
 
 - `go`
 - `clang`
-- `docker`
-- `make`
+- `mise`
 
 #### Compilation steps
 
-Compiling OBI is a two-tier process: first, we need to build the eBPF code (written in C) and generate the Go bindings. There are two `Makefile` targets for that, `generate` and `docker-generate`. The difference between them is that `generate` will attempt to use the local clang/LLVM toolchain, whereas `docker-generate` pulls a Docker image containing all of the tooling required - this is also the target used by OBI's GitHub CI.
-Once the eBPF files have been generated, we can use the `compile` `Makefile` target to build the main binary.
+Compiling OBI is a two-tier process: first, generate the Go bindings from the
+eBPF code; then compile the main binary.
 
 ```
-make docker-generate # or make generate
-make compile
+mise run generate
+mise run compile
 ```
 
-Both generate targets build the eBPF code for amd64 and arm64. To iterate faster locally, `BPF_TARGETS` selects a single architecture, for example `make generate BPF_TARGETS=arm64`.
+The generation task builds the eBPF code for amd64 and arm64. To iterate faster
+locally, set `BPF_TARGETS=arm64 mise run generate` to select a single architecture.
 
-A convenience `Makefile` target called `dev` which invokes both the generation and compilation step is also provided:
+A convenience task called `dev` invokes both generation and compilation:
 
 ```
-make dev
+mise run dev
 ```
 
 #### Installing `clang-format` hooks
@@ -85,51 +86,52 @@ make dev
 OBI relies on `clang-format` for linting the C code, and as such, ships a convenience _pre-commit_ git hook that formats the code during the commit process. To enable/install this hook, simply do:
 
 ```
-make install-hooks
+mise run install-hooks
 ```
 
 #### Manually formatting the C code
 
 ```
-make docker-clang-format # or make clang-format
+mise run clang-format
 ```
 
 #### Linting the C code
 
 ```
-make docker-clang-tidy # or make clang-tidy
+mise run clang-tidy
 ```
 
-CI formats and lints the C code with the `clang-format` and `clang-tidy` versions pinned in `mise.toml`. The `docker-` targets use the toolchain from the generator image, the same LLVM build as the clang that `make docker-generate` uses. `make clang-format`, `make clang-tidy` and the pre-commit hook use the local tools instead; install the versions pinned in `mise.toml`, and point `CLANG_FORMAT` and `CLANG_TIDY` at them if they are not the default `clang-format` and `clang-tidy` in your `PATH`.
+CI formats and lints C code with the `clang-format` and `clang-tidy` versions
+pinned in `mise.toml`. The pre-commit hook uses the same pinned local tool.
 
 #### Formatting the Go code
 
 ```
-make fmt
+mise run format-go
 ```
 
 #### Linting the Go code
 
 ```
-make lint
+mise run lint-go
 ```
 
 #### Running unit tests
 
 ```
-make test
+mise run test-go
 ```
 
 #### Running integration tests
 
 ```
-make integration-test
+mise run integration-test
 ```
 
 #### Running k8s integration tests
 
 ```
-make integration-test-k8s
+mise run integration-test-k8s
 ```
 
 ### Issues
@@ -208,8 +210,8 @@ Check out a new branch, make modifications, run linters and tests, and push the 
 ```sh
 git checkout -b <YOUR_BRANCH_NAME>
 # edit files
-make fmt
-make lint
+mise run fmt
+mise run lint
 git add -p
 git commit
 git push <YOUR_FORK> <YOUR_BRANCH_NAME>

@@ -1,0 +1,7 @@
+docker_bpf2go_calls=30
+docker_clang_calls=30
+docker_go_calls=2
+docker_clang_total_ns=59170000000
+output_count=90
+go_version=go version go1.27.0 linux/amd64
+toolchain=local

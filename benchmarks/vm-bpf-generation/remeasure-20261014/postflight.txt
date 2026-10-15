@@ -1,0 +1,10 @@
+branch_go=go version go1.27.2 linux/amd64
+branch_goenv_gotoolchain=auto
+branch_go_install_after=1.27.1 1.27.2 
+module_cache_final=1.1G
+build_cache_final=110M
+go_toolchain_download_mentions=0
+branch_generated_files=90
+main_generated_files=90
+docker_gomodcache_volume_size=736.4M
+docker_gocache_volume_size=12.8M

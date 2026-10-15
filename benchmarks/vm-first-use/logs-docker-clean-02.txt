@@ -1,0 +1,33 @@
+run=docker-clean-02
+commit=a6207d767125db2355710502542451cc4b474d96
+start_utc=2026-10-14T11:26:29Z
+docker_server=29.1.3
+host_kernel=Linux 6.8.0-142-generic
+docker_store_empty=yes
+generator_image=ghcr.io/open-telemetry/obi-generator:0.2.17
+generated_outputs_before=0
+task_exit=0
+task_duration_ns=120358394232
+end_utc=2026-10-14T11:28:30Z
+generated_outputs_after=60
+sha256:1ae9406f2566e32ccf5d8ba8e5ff0586a322300ae82870988ad605429021174a ["ghcr.io/open-telemetry/obi-generator@sha256:1ae9406f2566e32ccf5d8ba8e5ff0586a322300ae82870988ad605429021174a"]
+go: downloading github.com/go-openapi/swag/conv v0.29.2
+go: downloading github.com/go-openapi/swag/fileutils v0.29.2
+go: downloading github.com/go-openapi/swag/jsonutils v0.29.2
+go: downloading github.com/go-openapi/swag/jsonutils v0.29.2
+go: downloading github.com/go-openapi/swag/loading v0.29.2
+go: downloading github.com/go-openapi/swag/mangling v0.29.2
+go: downloading github.com/go-openapi/swag/loading v0.29.2
+go: downloading github.com/go-openapi/swag/netutils v0.29.2
+go: downloading github.com/go-openapi/swag/mangling v0.29.2
+go: downloading github.com/go-openapi/swag/netutils v0.29.2
+go: downloading github.com/go-openapi/swag/stringutils v0.29.2
+go: downloading github.com/go-openapi/swag/stringutils v0.29.2
+go: downloading github.com/go-openapi/swag/typeutils v0.29.2
+go: downloading github.com/go-openapi/swag/typeutils v0.29.2
+go: downloading github.com/go-openapi/swag/yamlutils v0.29.2
+go: downloading github.com/go-openapi/swag/yamlutils v0.29.2
+go: downloading github.com/moby/spdystream v0.5.1
+go: downloading github.com/moby/spdystream v0.5.1
+go: downloading github.com/go-openapi/swag/pools v0.29.2
+go: downloading github.com/go-openapi/swag/pools v0.29.2

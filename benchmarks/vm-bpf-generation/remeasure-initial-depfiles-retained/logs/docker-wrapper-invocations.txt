@@ -1,0 +1,10 @@
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build
+docker run --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build

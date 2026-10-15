@@ -1,0 +1,7 @@
+profile_command=direct docker run replicating make docker-generate mounts/env; entrypoint shell keeps wrappers from generator /generate.sh defaults
+main_source=/home/gregor/obi-bench/task3/remeasure-final-20261014/main
+git_dir=/home/gregor/obi-bench/task3/remeasure-final-20261014/main/.git
+git_common_dir=/home/gregor/obi-bench/task3/remeasure-final-20261014/main/.git
+generator_image=sha256:1ae9406f2566e32ccf5d8ba8e5ff0586a322300ae82870988ad605429021174a
+docker_gomodcache=obi-bpf-remeasure-gomodcache:/go/pkg/mod
+docker_gocache=obi-bpf-remeasure-gocache:/tmp/go-build

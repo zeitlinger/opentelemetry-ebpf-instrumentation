@@ -1,0 +1,7 @@
+mise_bpf2go=/home/gregor/obi-bench/task3/runs/mise-data/installs/go-github-com-cilium-ebpf-cmd-bpf2go/0.22.0/bin/bpf2go
+mise_clang=/home/gregor/obi-bench/task3/runs/mise-data/installs/clang/22.1.8/.mise-bins/clang
+mise_go=/home/gregor/obi-bench/task3/runs/mise-data/installs/go/1.27.2/bin/go
+docker_tools=/usr/local/go/bin/go
+/go/bin/bpf2go
+profile_run_count=one extra full generation per path after the five timed samples
+generated_go_compile=not part of either generate command; go wrapper records invoked Go commands

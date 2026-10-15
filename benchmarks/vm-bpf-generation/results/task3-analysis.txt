@@ -1,0 +1,18 @@
+Task 3: current-main BPF generation parity
+
+Source inputs: main commit a6207d767125db2355710502542451cc4b474d96 and Mise branch commit 7a5f0146890090f312751f9cb14ceb4c5f32739f. The 280 generated-code-relevant bpf/**/*.c and *.h inputs (excluding bpf/tests) are byte-identical. Each run began with zero generated BPF files and generated 60 artifacts for amd64 and arm64.
+
+Commands:
+- Main: make docker-generate (which ran make generate inside ghcr.io/open-telemetry/obi-generator:0.2.17).
+- Branch: mise run generate (which ran the Mise-managed Go/clang toolchain and bpf/Makefile generation).
+
+Results:
+- Main Docker/Make: 46.734001521 s; 60 output files.
+- Branch Mise: 67.833666025 s; 60 output files (Mise install was performed before task timer).
+- 38/60 artifact SHA-256 values match. All generated Go bindings match (30/30); 22/30 .o files differ, with 8 .o files matching.
+- For every mismatching object, section layout matches and every section other than .BTF is byte-identical, including executable BPF sections and .BTF.ext. The representative generictracer object has the same sorted set of .BTF strings, but a different type/string ordering in .BTF. This indicates metadata ordering, not a change to generated BPF program code. The build is therefore not byte-identical at the .o level.
+- The two paths use the same advertised compiler/tool versions (Clang/LLVM 22.1.8, bpf2go v0.22.0), but different packaged compiler builds: the old generator image uses Alpine clang; the Mise toolchain is conda-forge clang. The exact cause of BTF ordering is not isolated beyond this difference, so do not claim that version numbers alone guarantee byte identity.
+
+Generator-image validation:
+- `mise run generator-image-build` succeeded in the isolated branch worktree, producing OCI image layout manifest sha256:02432f30bf2a66f9f476f3d2b73e70803634cf7c8c4e5f42f1164d266a9c5ff2 (index.json SHA-256 958837b31072fa5852f871022188cbdc9c42305cfd90984deeb1d2c9143f2f61; layout size 1,290,896,285 bytes).
+- A warm-cache verification run took 3.651 s and exited 0. The built image was loaded for inspection; Mise 2026.10.8, Go 1.27.1, Clang/LLVM 22.1.8, and bpf2go v0.22.0 were confirmed. `mise run generator-image-build` itself was validated; no application/release image build was attempted.

@@ -1,0 +1,90 @@
+[WARN] migrate: error parsing config file: ~/obi-bench/task1/setup-only/mise-install-01/repo/mise.toml
+mise WARN  mise version 2026.10.10 available
+mise WARN  To update, run mise self-update
+run=mise-install-01
+start_utc=2026-10-14T11:35:12Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=0
+install_duration_ns=52536555911
+end_utc=2026-10-14T11:36:05Z
+mise ✓ markdownlint-cli2@0.23.3                                           1.1s
+mise ✓ github:open-telemetry/weaver@0.27.0                                5.2s  weaver-x86_64-unknown-linux-gnu.tar.xz
+mise ✓ golangci-lint@2.13.2                                               5.2s  golangci-lint-2.13.2-linux-amd64.tar.gz
+mise ✓ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  14.2s  clang-tidy-22_linux-amd64
+mise ✓ go@1.27.1                                                          25.4s  go1.27.1.linux-amd64.tar.gz
+mise ✓ clang-format@22.1.8                                                50.3s
+mise ✓ conda:llvm-tools@22.1.8                                            50.6s
+mise ✓ clang@22.1.8                                                       52.5s
+mise ████████████████ 8/8 · installed 8 tools in 52.5s
+[WARN] migrate: error parsing config file: ~/obi-bench/task1/setup-only/mise-install-02/repo/mise.toml
+mise WARN  mise version 2026.10.10 available
+mise WARN  To update, run mise self-update
+run=mise-install-02
+start_utc=2026-10-14T11:36:05Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=0
+install_duration_ns=54455120066
+end_utc=2026-10-14T11:37:00Z
+mise ✓ markdownlint-cli2@0.23.3                                           1.4s
+mise ✓ github:open-telemetry/weaver@0.27.0                                6.2s  weaver-x86_64-unknown-linux-gnu.tar.xz
+mise ✓ golangci-lint@2.13.2                                               6.8s  golangci-lint-2.13.2-linux-amd64.tar.gz
+mise ✓ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  15.1s  clang-tidy-22_linux-amd64
+mise ✓ go@1.27.1                                                          33.8s  go1.27.1.linux-amd64.tar.gz
+mise ✓ clang-format@22.1.8                                                52.4s
+mise ✓ conda:llvm-tools@22.1.8                                            52.7s
+mise ✓ clang@22.1.8                                                       54.4s
+mise ████████████████ 8/8 · installed 8 tools in 54.4s
+[WARN] migrate: error parsing config file: ~/obi-bench/task1/setup-only/mise-install-03/repo/mise.toml
+mise WARN  mise version 2026.10.10 available
+mise WARN  To update, run mise self-update
+run=mise-install-03
+start_utc=2026-10-14T11:37:01Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=0
+install_duration_ns=51850894544
+end_utc=2026-10-14T11:37:53Z
+mise ✓ markdownlint-cli2@0.23.3                                           1.3s
+mise ✓ github:open-telemetry/weaver@0.27.0                                6.3s  weaver-x86_64-unknown-linux-gnu.tar.xz
+mise ✓ golangci-lint@2.13.2                                               7.4s  golangci-lint-2.13.2-linux-amd64.tar.gz
+mise ✓ go@1.27.1                                                          18.6s  go1.27.1.linux-amd64.tar.gz
+mise ✓ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  20.5s  clang-tidy-22_linux-amd64
+mise ✓ clang-format@22.1.8                                                50.2s
+mise ✓ conda:llvm-tools@22.1.8                                            50.2s
+mise ✓ clang@22.1.8                                                       51.8s
+mise ████████████████ 8/8 · installed 8 tools in 51.8s
+[WARN] migrate: error parsing config file: ~/obi-bench/task1/setup-only/mise-install-04/repo/mise.toml
+mise WARN  mise version 2026.10.10 available
+mise WARN  To update, run mise self-update
+run=mise-install-04
+start_utc=2026-10-14T11:37:53Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=0
+install_duration_ns=54103940131
+end_utc=2026-10-14T11:38:47Z
+mise ✓ markdownlint-cli2@0.23.3                                           1.1s
+mise ✓ go@1.27.1                                                          11.9s  go1.27.1.linux-amd64.tar.gz
+mise ✓ github:open-telemetry/weaver@0.27.0                                22.1s  weaver-x86_64-unknown-linux-gnu.tar.xz
+mise ✓ golangci-lint@2.13.2                                               31.6s  golangci-lint-2.13.2-linux-amd64.tar.gz
+mise ✓ clang-format@22.1.8                                                51.6s
+mise ✓ conda:llvm-tools@22.1.8                                            51.6s
+mise ✓ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  52.4s  clang-tidy-22_linux-amd64
+mise ✓ clang@22.1.8                                                       54.1s
+mise ████████████████ 8/8 · installed 8 tools in 54.1s
+[WARN] migrate: error parsing config file: ~/obi-bench/task1/setup-only/mise-install-05/repo/mise.toml
+mise WARN  mise version 2026.10.10 available
+mise WARN  To update, run mise self-update
+run=mise-install-05
+start_utc=2026-10-14T11:38:48Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=1
+install_duration_ns=1309943355
+end_utc=2026-10-14T11:38:49Z
+mise ████████████████ 8/8 · installed 0 tools · 8 failed in 1.3s
+mise ERROR Failed to install tools: aqua:golangci/golangci-lint@2.13.2, conda:clang-format@22.1.8, conda:clang@22.1.8, conda:llvm-tools@22.1.8, core:go@1.27.1, github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d, github:open-telemetry/weaver@0.27.0, npm:markdownlint-cli2@0.23.3
+mise ERROR Version: 2026.9.16 linux-x64 (2026-09-28)
+mise ERROR Run with --verbose or MISE_VERBOSE=1 for more information

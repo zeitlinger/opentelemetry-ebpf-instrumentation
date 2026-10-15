@@ -1,0 +1,10 @@
+mise_clang_total_ns=65965973728
+docker_clang_total_ns=0
+mise_bpf2go_calls=30
+docker_bpf2go_calls=0
+mise_clang_calls=30
+docker_clang_calls=0
+mise_go_calls=2
+docker_go_calls=0
+generated_outputs_mise=90
+generated_outputs_docker=90

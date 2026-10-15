@@ -1,0 +1,5 @@
+date_utc=2026-10-14T14:42:38Z
+branch_commit=worktree-snapshot-current
+go_pin=1.27.2
+bpf2go_pin="go:github.com/cilium/ebpf/cmd/bpf2go" = "0.22.0"
+makefile_bpf2go=BPF2GO ?= bpf2go

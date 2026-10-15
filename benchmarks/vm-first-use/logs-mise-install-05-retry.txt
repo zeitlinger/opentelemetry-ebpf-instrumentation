@@ -1,0 +1,16 @@
+run=mise-install-05-retry
+start_utc=2026-10-14T11:41:13Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=0
+install_duration_ns=51518397924
+end_utc=2026-10-14T11:42:04Z
+mise ✓ markdownlint-cli2@0.23.3                                           1.2s
+mise ✓ github:open-telemetry/weaver@0.27.0                                6.2s  weaver-x86_64-unknown-linux-gnu.tar.xz
+mise ✓ golangci-lint@2.13.2                                               6.8s  golangci-lint-2.13.2-linux-amd64.tar.gz
+mise ✓ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  16.5s  clang-tidy-22_linux-amd64
+mise ✓ go@1.27.1                                                          18.0s  go1.27.1.linux-amd64.tar.gz
+mise ✓ clang-format@22.1.8                                                49.6s
+mise ✓ conda:llvm-tools@22.1.8                                            49.7s
+mise ✓ clang@22.1.8                                                       51.5s
+mise ████████████████ 8/8 · installed 8 tools in 51.5s

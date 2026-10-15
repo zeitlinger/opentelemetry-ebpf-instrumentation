@@ -1,0 +1,7 @@
+run=mise-install-04
+start_utc=2026-10-14T11:37:53Z
+mise=2026.9.16 linux-x64 (2026-09-28)
+initial_mise_data_cache=empty
+install_exit=0
+install_duration_ns=54103940131
+end_utc=2026-10-14T11:38:47Z

@@ -1,0 +1,56 @@
+38412918565	Generate BPF	success	91
+38412918565	Build test matrix	success	36
+38412918565	Unit tests #2 (amd64)	success	207
+38412918565	Unit tests #0 (amd64)	success	365
+38412918565	Unit tests #1 (arm64)	success	131
+38412918565	Unit tests #2 (arm64)	success	95
+38412918565	Unit tests #0 (arm64)	success	206
+38412918565	Unit tests #1 (amd64)	success	312
+38412917253	BPF unit tests (amd64)	success	29
+38412917253	BPF unit tests (arm64)	success	28
+38412918217	Generate BPF	success	99
+38412918217	Lint on linux (arm64)	success	265
+38412918217	Lint on linux (amd64)	success	505
+38412918217	Lint on macOS	failure	2701
+38412917267	Generate BPF	success	93
+38412917267	Clang tidy	success	392
+38412917267	Clang format	success	15
+38412917267	Generated files and repo hygiene	success	250
+38412917267	OTel Collector example (ocb build)	success	65
+38412917267	Collector cross-compile (linux/arm64)	success	33
+38412917267	Collector cross-compile (linux/ppc64le)	success	21
+38412917267	Collector cross-compile (linux/386)	success	25
+38412917267	Collector cross-compile (windows/amd64)	success	24
+38412917267	Collector cross-compile (windows/arm64)	success	22
+38412917267	Collector cross-compile (darwin/arm64)	success	27
+38412917267	Collector cross-compile (linux/s390x)	success	24
+38412917267	Collector cross-compile (linux/amd64)	success	40
+38412917267	Collector cross-compile (darwin/amd64)	success	24
+38408081778	Generate BPF	success	86
+38408081778	Build test matrix	success	27
+38408081778	Unit tests #1 (amd64)	success	296
+38408081778	Unit tests #0 (arm64)	success	303
+38408081778	Unit tests #0 (amd64)	success	397
+38408081778	Unit tests #1 (arm64)	success	223
+38408081778	Unit tests #2 (arm64)	success	201
+38408081778	Unit tests #2 (amd64)	success	222
+38408080140	BPF unit tests (amd64)	success	22
+38408080140	BPF unit tests (arm64)	success	28
+38408080145	Generate BPF	success	108
+38408080145	Lint on linux (arm64)	success	297
+38408080145	Lint on linux (amd64)	success	427
+38408080145	Lint on macOS	success	550
+38408081098	Clang format	success	14
+38408081098	Generate BPF	success	93
+38408081098	Clang tidy	success	744
+38408081098	Generated files and repo hygiene	success	254
+38408081098	OTel Collector example (ocb build)	success	257
+38408081098	Collector cross-compile (linux/s390x)	success	43
+38408081098	Collector cross-compile (linux/ppc64le)	success	46
+38408081098	Collector cross-compile (windows/arm64)	success	48
+38408081098	Collector cross-compile (darwin/amd64)	success	45
+38408081098	Collector cross-compile (windows/amd64)	success	39
+38408081098	Collector cross-compile (darwin/arm64)	success	37
+38408081098	Collector cross-compile (linux/arm64)	success	119
+38408081098	Collector cross-compile (linux/386)	success	41
+38408081098	Collector cross-compile (linux/amd64)	success	137

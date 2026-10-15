@@ -1,0 +1,4 @@
+branch full: runs=31.405s, 32.597s, 33.542s, 32.498s, 32.353s; median=32.498s; range=31.405-33.542s
+branch noop: runs=0.091s, 0.090s, 0.094s, 0.090s, 0.091s; median=0.091s; range=0.090-0.094s
+main full: runs=29.172s, 29.226s, 29.245s, 29.426s, 28.925s; median=29.226s; range=28.925-29.426s
+main noop: runs=0.450s, 0.437s, 0.460s, 0.451s, 0.445s; median=0.450s; range=0.437-0.460s

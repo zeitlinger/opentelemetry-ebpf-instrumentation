@@ -1,0 +1,10 @@
+Built generator image OCI manifest: sha256:02432f30bf2a66f9f476f3d2b73e70803634cf7c8c4e5f42f1164d266a9c5ff2
+OCI index.json SHA-256: 958837b31072fa5852f871022188cbdc9c42305cfd90984deeb1d2c9143f2f61
+OCI layout size: 1290896285 bytes
+Warm `mise run generator-image-build`: exit 0, 3650959954 ns (2026-10-14T11:59:16Z to 11:59:20Z)
+Inside built Mise generator image:
+- Mise 2026.10.8 linux-x64 (2026-10-11)
+- Go 1.27.1 linux/amd64
+- Clang 22.1.8, conda-forge clangdev-feedstock 4376d67fb227e616ccc5717854d9d41ab142e4fa; target x86_64-conda-linux-gnu
+- LLVM 22.1.8
+- bpf2go github.com/cilium/ebpf v0.22.0

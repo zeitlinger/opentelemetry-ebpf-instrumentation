@@ -1,0 +1,4 @@
+branch full: median=35.681s range=33.745-38.086s samples=38.086, 36.469, 35.681, 33.745, 34.276
+branch noop: median=0.094s range=0.092-0.131s samples=0.131, 0.110, 0.094, 0.092, 0.093
+main full: median=32.260s range=32.007-32.444s samples=32.444, 32.260, 32.325, 32.186, 32.007
+main noop: median=0.481s range=0.455-0.522s samples=0.481, 0.479, 0.522, 0.455, 0.486

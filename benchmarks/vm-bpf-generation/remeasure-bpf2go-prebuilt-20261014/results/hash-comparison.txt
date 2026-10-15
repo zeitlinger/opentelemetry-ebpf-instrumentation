@@ -1,0 +1,5 @@
+output_hash_gate_against_previous_branch_full_run=90/90 files match (0 missing, 0 extra, 0 differing)
+timed_branch_run1_vs_run5=90/90 files match
+branch_vs_main=22/90 files differ; all 22 differences are .o files
+matching_generated_go_sources=30/30
+matching_dependency_sidecars=30/30

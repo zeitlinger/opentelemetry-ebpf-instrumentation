@@ -1,0 +1,18 @@
+Measured 2026-10-14 on the same Ubuntu 24.04.5 KVM guest, 4 vCPU, 7.8 GiB RAM.
+
+Mise path (`mise run generate`):
+- Mise 2026.9.16 linux-x64
+- mise.toml pin Go 1.27.2; `mise exec -- go version` => go1.27.2 linux/amd64
+- GOTOOLCHAIN=auto; no `go: downloading go1.27.*` messages in the warm-up or timed Mise task logs
+- Clang 22.1.8 from conda-forge (`clangdev-feedstock` build 4376d67fb227e616ccc5717854d9d41ab142e4fa)
+- bpf2go module: github.com/cilium/ebpf v0.22.0, invoked with `go tool -modfile=internal/tools/go.mod bpf2go`
+- Go module/build cache before timing: 1.1 GiB / 108 MiB (pre-existing cache plus untimed warm-up); final build cache 108 MiB
+
+Main Docker path (`make docker-generate`):
+- Image `ghcr.io/open-telemetry/obi-generator:0.2.17`, image ID `sha256:1ae9406f2566e32ccf5d8ba8e5ff0586a322300ae82870988ad605429021174a`
+- Image Go 1.27.0, `GOTOOLCHAIN=local` (confirmed by running `go env` inside the image); the pinned generator image does not auto-switch to the source go.mod's Go 1.27.2 toolchain
+- Alpine clang 22.1.8 (`clang-22`)
+- bpf2go module: github.com/cilium/ebpf v0.22.0, prebuilt `/go/bin/bpf2go`
+- Persistent named Docker volumes mounted by the temporary `docker` PATH wrapper: `obi-bpf-remeasure-gomodcache` at `/go/pkg/mod` (736.4 MiB after warm-up), `obi-bpf-remeasure-gocache` at `/tmp/go-build` (12.8 MiB after warm-up). The Make target itself was unchanged.
+
+Both paths use the same BPF C flags: `-std=gnu17 -O2 -g -Wunaligned-access -Wpacked -Wpadded -Wall -Werror` and generate both amd64 and arm64. Advertised Clang and bpf2go versions match, but Go versions and Clang builds/tool packaging differ.

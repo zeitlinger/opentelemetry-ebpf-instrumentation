@@ -1,0 +1,5 @@
+Representative object: pkg/internal/ebpf/generictracer/bpf_x86_bpfel.o
+section_count=151
+section_names_equal=true
+different_sections=.BTF
+Interpretation: only .BTF differed in this representative object; this check does not establish equivalence for all 22 differing objects.

@@ -1,0 +1,4 @@
+section_count=151 section_names_equal=True
+different_sections=.BTF
+Representative object: pkg/internal/ebpf/generictracer/bpf_x86_bpfel.o
+Comparison used llvm-objcopy to extract each non-empty ELF section. This was one representative object, not all 22 mismatching objects.

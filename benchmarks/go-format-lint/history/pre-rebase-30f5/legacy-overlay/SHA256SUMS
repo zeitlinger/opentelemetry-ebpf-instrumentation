@@ -1,0 +1,5 @@
+0932c67fd772896522b3eacf4f66b45361ef5e4db342d254827181b6e89416bb  ./Makefile
+c65f7ecbdd460a6c535dd2d0f77683bf4e54127106838eb30ebabb2e591a1fb9  ./aligned/internal/tools/go.mod
+9c20e369d7951510a2056a11eeae87bcd508f719c80b4a62209d9777f532d4d8  ./aligned/internal/tools/go.sum
+8e9e4db4929e945cf05c5be4fa18d6583e87daf1231d2a14ba9e67d245bdd0af  ./internal/tools/go.mod
+9dc2ea6568f5fd72f981f2d0a8bb6bb1fb1355ab2d2b5581a071eff872cdb7df  ./internal/tools/go.sum

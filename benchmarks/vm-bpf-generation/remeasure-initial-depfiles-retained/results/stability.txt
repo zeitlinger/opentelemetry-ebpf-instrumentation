@@ -1,0 +1,8 @@
+branch full sample 2 vs sample 1: 1 differing outputs: pkg/internal/ebpf/logenricher/bpf_x86_bpfel.o
+branch full sample 3 vs sample 1: 1 differing outputs: pkg/internal/ebpf/logenricher/bpf_x86_bpfel.o
+branch full sample 4 vs sample 1: 0 differing outputs: none
+branch full sample 5 vs sample 1: 1 differing outputs: pkg/internal/ebpf/logenricher/bpf_x86_bpfel.o
+main full sample 2 vs sample 1: 1 differing outputs: pkg/internal/ebpf/tpinjector/bpffionreadfixup_arm64_bpfel.o
+main full sample 3 vs sample 1: 1 differing outputs: pkg/internal/ebpf/generictracer/bpf_arm64_bpfel.o
+main full sample 4 vs sample 1: 1 differing outputs: pkg/internal/ebpf/tpinjector/bpffionreadfixup_arm64_bpfel.o
+main full sample 5 vs sample 1: 0 differing outputs: none

@@ -1,0 +1,7 @@
+Representative object comparison:
+  pkg/internal/ebpf/generictracer/bpf_x86_bpfel.o
+  section_count=151
+  section_names_equal=True
+  different_sections=.BTF
+
+`llvm-objcopy` extracted and compared each non-empty ELF section. Every section matched except .BTF; BPF instruction sections, relocations, and .BTF.ext matched. This is consistent with metadata ordering differences, not a change to BPF program code. This is a representative object, not an exhaustive section-by-section comparison of all 22 mismatching object files.

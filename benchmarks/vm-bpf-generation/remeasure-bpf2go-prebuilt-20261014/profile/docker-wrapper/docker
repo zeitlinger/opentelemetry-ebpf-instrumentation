@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == run ]]; then
+  shift
+  printf '%s\n' "docker run with profile wrappers + existing warm cache volumes" >> "$PROFILE_DIR/docker-wrapper-invocations.txt"
+  exec /usr/bin/docker run \
+    --mount type=volume,src=obi-bpf-remeasure-gomodcache,target=/go/pkg/mod \
+    --mount type=volume,src=obi-bpf-remeasure-gocache,target=/tmp/go-build \
+    -v "$PROFILE_DIR/docker:/profile" \
+    -e BPF2GO=/profile/bin/bpf2go -e CLANG=/profile/bin/clang \
+    -e PATH=/profile/bin:/go/bin:/usr/lib/llvm22/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    "$@"
+fi
+exec /usr/bin/docker "$@"

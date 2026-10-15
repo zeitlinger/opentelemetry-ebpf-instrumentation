@@ -1,0 +1,560 @@
+PR checks	Generate BPF	38583649199	104
+PR checks	Clang tidy	38583649199	554
+PR checks	Clang format	38583649199	11
+PR checks	OTel Collector example (ocb build)	38583649199	72
+PR checks	Collector cross-compile (linux/arm64)	38583649199	38
+PR checks	Collector cross-compile (linux/amd64)	38583649199	39
+PR checks	Collector cross-compile (linux/s390x)	38583649199	19
+PR checks	Collector cross-compile (darwin/amd64)	38583649199	27
+PR checks	Collector cross-compile (linux/386)	38583649199	27
+PR checks	Collector cross-compile (linux/ppc64le)	38583649199	28
+PR checks	Collector cross-compile (windows/amd64)	38583649199	39
+PR checks	Generated files and repo hygiene	38583649199	297
+PR checks	Collector cross-compile (windows/arm64)	38583649199	19
+PR checks	Collector cross-compile (darwin/arm64)	38583649199	23
+PR checks	Clang tidy	38583529971	589
+PR checks	Generate BPF	38583529971	105
+PR checks	Clang format	38583529971	9
+PR checks	OTel Collector example (ocb build)	38583529971	62
+PR checks	Collector cross-compile (linux/ppc64le)	38583529971	28
+PR checks	Generated files and repo hygiene	38583529971	402
+PR checks	Collector cross-compile (linux/amd64)	38583529971	37
+PR checks	Collector cross-compile (linux/arm64)	38583529971	44
+PR checks	Collector cross-compile (linux/s390x)	38583529971	25
+PR checks	Collector cross-compile (linux/386)	38583529971	23
+PR checks	Collector cross-compile (windows/amd64)	38583529971	28
+PR checks	Collector cross-compile (darwin/amd64)	38583529971	24
+PR checks	Collector cross-compile (darwin/arm64)	38583529971	25
+PR checks	Collector cross-compile (windows/arm64)	38583529971	26
+PR checks	Clang format	38583322372	11
+PR checks	Generate BPF	38583322372	106
+PR checks	Clang tidy	38583322372	529
+PR checks	Generated files and repo hygiene	38583322372	299
+PR checks	Collector cross-compile (windows/arm64)	38583322372	26
+PR checks	Collector cross-compile (linux/arm64)	38583322372	46
+PR checks	Collector cross-compile (linux/amd64)	38583322372	41
+PR checks	Collector cross-compile (linux/ppc64le)	38583322372	21
+PR checks	Collector cross-compile (linux/s390x)	38583322372	22
+PR checks	OTel Collector example (ocb build)	38583322372	71
+PR checks	Collector cross-compile (darwin/arm64)	38583322372	22
+PR checks	Collector cross-compile (darwin/amd64)	38583322372	20
+PR checks	Collector cross-compile (windows/amd64)	38583322372	20
+PR checks	Collector cross-compile (linux/386)	38583322372	28
+PR checks	Clang format	38581303111	9
+PR checks	Generate BPF	38581303111	97
+PR checks	Clang tidy	38581303111	572
+PR checks	OTel Collector example (ocb build)	38581303111	202
+PR checks	Generated files and repo hygiene	38581303111	323
+PR checks	Collector cross-compile (darwin/amd64)	38581303111	32
+PR checks	Collector cross-compile (linux/amd64)	38581303111	164
+PR checks	Collector cross-compile (linux/ppc64le)	38581303111	43
+PR checks	Collector cross-compile (darwin/arm64)	38581303111	33
+PR checks	Collector cross-compile (linux/arm64)	38581303111	122
+PR checks	Collector cross-compile (windows/amd64)	38581303111	38
+PR checks	Collector cross-compile (linux/386)	38581303111	37
+PR checks	Collector cross-compile (linux/s390x)	38581303111	41
+PR checks	Collector cross-compile (windows/arm64)	38581303111	29
+PR checks	Generate BPF	38563460312	103
+PR checks	Clang format	38563460312	11
+PR checks	Collector cross-compile (linux/ppc64le)	38563460312	40
+PR checks	Collector cross-compile (linux/arm64)	38563460312	222
+PR checks	Collector cross-compile (linux/amd64)	38563460312	168
+PR checks	Generated files and repo hygiene	38563460312	309
+PR checks	OTel Collector example (ocb build)	38563460312	199
+PR checks	Collector cross-compile (linux/s390x)	38563460312	40
+PR checks	Collector cross-compile (linux/386)	38563460312	44
+PR checks	Collector cross-compile (windows/amd64)	38563460312	40
+PR checks	Collector cross-compile (windows/arm64)	38563460312	33
+PR checks	Collector cross-compile (darwin/arm64)	38563460312	43
+PR checks	Collector cross-compile (darwin/amd64)	38563460312	39
+PR checks	Clang tidy	38563460312	579
+PR checks	Generate BPF	38551978894	139
+PR checks	Clang tidy	38551978894	341
+PR checks	Clang format	38551978894	8
+PR checks	Collector cross-compile (linux/amd64)	38551978894	125
+PR checks	Generated files and repo hygiene	38551978894	315
+PR checks	Collector cross-compile (linux/ppc64le)	38551978894	29
+PR checks	OTel Collector example (ocb build)	38551978894	212
+PR checks	Collector cross-compile (linux/arm64)	38551978894	124
+PR checks	Collector cross-compile (darwin/amd64)	38551978894	47
+PR checks	Collector cross-compile (windows/arm64)	38551978894	45
+PR checks	Collector cross-compile (windows/amd64)	38551978894	43
+PR checks	Collector cross-compile (darwin/arm64)	38551978894	45
+PR checks	Collector cross-compile (linux/386)	38551978894	36
+PR checks	Collector cross-compile (linux/s390x)	38551978894	40
+PR checks	Clang tidy	38530580312	571
+PR checks	Clang format	38530580312	8
+PR checks	Generate BPF	38530580312	119
+PR checks	Collector cross-compile (darwin/amd64)	38530580312	36
+PR checks	OTel Collector example (ocb build)	38530580312	203
+PR checks	Collector cross-compile (linux/amd64)	38530580312	117
+PR checks	Generated files and repo hygiene	38530580312	293
+PR checks	Collector cross-compile (linux/386)	38530580312	42
+PR checks	Collector cross-compile (darwin/arm64)	38530580312	30
+PR checks	Collector cross-compile (linux/ppc64le)	38530580312	36
+PR checks	Collector cross-compile (linux/s390x)	38530580312	36
+PR checks	Collector cross-compile (linux/arm64)	38530580312	112
+PR checks	Collector cross-compile (windows/arm64)	38530580312	36
+PR checks	Collector cross-compile (windows/amd64)	38530580312	27
+PR checks	Generate BPF	38522410784	112
+PR checks	Clang tidy	38522410784	584
+PR checks	Clang format	38522410784	10
+PR checks	Generated files and repo hygiene	38522410784	303
+PR checks	OTel Collector example (ocb build)	38522410784	169
+PR checks	Collector cross-compile (linux/s390x)	38522410784	30
+PR checks	Collector cross-compile (darwin/arm64)	38522410784	28
+PR checks	Collector cross-compile (linux/ppc64le)	38522410784	28
+PR checks	Collector cross-compile (linux/386)	38522410784	29
+PR checks	Collector cross-compile (darwin/amd64)	38522410784	25
+PR checks	Collector cross-compile (windows/amd64)	38522410784	21
+PR checks	Collector cross-compile (windows/arm64)	38522410784	22
+PR checks	Collector cross-compile (linux/arm64)	38522410784	131
+PR checks	Collector cross-compile (linux/amd64)	38522410784	156
+PR checks	Clang tidy	38522328174	442
+PR checks	Clang format	38522328174	10
+PR checks	Generate BPF	38522328174	104
+PR checks	OTel Collector example (ocb build)	38522328174	198
+PR checks	Collector cross-compile (linux/amd64)	38522328174	161
+PR checks	Collector cross-compile (linux/386)	38522328174	34
+PR checks	Collector cross-compile (linux/arm64)	38522328174	154
+PR checks	Collector cross-compile (windows/arm64)	38522328174	38
+PR checks	Collector cross-compile (windows/amd64)	38522328174	43
+PR checks	Collector cross-compile (linux/ppc64le)	38522328174	35
+PR checks	Generated files and repo hygiene	38522328174	343
+PR checks	Collector cross-compile (darwin/arm64)	38522328174	31
+PR checks	Collector cross-compile (darwin/amd64)	38522328174	40
+PR checks	Collector cross-compile (linux/s390x)	38522328174	37
+PR checks	Generate BPF	38522311269	108
+PR checks	Clang tidy	38522311269	445
+PR checks	Clang format	38522311269	9
+PR checks	Generated files and repo hygiene	38522311269	315
+PR checks	Collector cross-compile (linux/ppc64le)	38522311269	35
+PR checks	OTel Collector example (ocb build)	38522311269	208
+PR checks	Collector cross-compile (windows/amd64)	38522311269	39
+PR checks	Collector cross-compile (windows/arm64)	38522311269	42
+PR checks	Collector cross-compile (linux/386)	38522311269	38
+PR checks	Collector cross-compile (linux/amd64)	38522311269	116
+PR checks	Collector cross-compile (darwin/amd64)	38522311269	42
+PR checks	Collector cross-compile (darwin/arm64)	38522311269	36
+PR checks	Collector cross-compile (linux/s390x)	38522311269	37
+PR checks	Collector cross-compile (linux/arm64)	38522311269	167
+PR checks	Clang format	38477651055	10
+PR checks	Generate BPF	38477651055	104
+PR checks	Clang tidy	38477651055	572
+PR checks	OTel Collector example (ocb build)	38477651055	195
+PR checks	Collector cross-compile (linux/arm64)	38477651055	146
+PR checks	Generated files and repo hygiene	38477651055	299
+PR checks	Collector cross-compile (darwin/amd64)	38477651055	35
+PR checks	Collector cross-compile (linux/amd64)	38477651055	115
+PR checks	Collector cross-compile (windows/amd64)	38477651055	30
+PR checks	Collector cross-compile (darwin/arm64)	38477651055	36
+PR checks	Collector cross-compile (linux/s390x)	38477651055	37
+PR checks	Collector cross-compile (linux/ppc64le)	38477651055	38
+PR checks	Collector cross-compile (linux/386)	38477651055	35
+PR checks	Collector cross-compile (windows/arm64)	38477651055	28
+PR checks	Clang format	38467619543	10
+PR checks	Generate BPF	38467619543	100
+PR checks	Clang tidy	38467619543	346
+PR checks	OTel Collector example (ocb build)	38467619543	66
+PR checks	Generated files and repo hygiene	38467619543	289
+PR checks	Collector cross-compile (windows/amd64)	38467619543	226
+PR checks	Collector cross-compile (darwin/amd64)	38467619543	119
+PR checks	Collector cross-compile (linux/ppc64le)	38467619543	33
+PR checks	Collector cross-compile (windows/arm64)	38467619543	31
+PR checks	Collector cross-compile (linux/amd64)	38467619543	31
+PR checks	Collector cross-compile (linux/s390x)	38467619543	26
+PR checks	Collector cross-compile (linux/386)	38467619543	27
+PR checks	Collector cross-compile (linux/arm64)	38467619543	32
+PR checks	Collector cross-compile (darwin/arm64)	38467619543	86
+PR checks	Generate BPF	38467170279	99
+PR checks	Clang tidy	38467170279	493
+PR checks	Clang format	38467170279	9
+PR checks	Generated files and repo hygiene	38467170279	310
+PR checks	Collector cross-compile (linux/arm64)	38467170279	51
+PR checks	Collector cross-compile (linux/s390x)	38467170279	164
+PR checks	Collector cross-compile (linux/ppc64le)	38467170279	25
+PR checks	Collector cross-compile (windows/amd64)	38467170279	26
+PR checks	OTel Collector example (ocb build)	38467170279	170
+PR checks	Collector cross-compile (linux/386)	38467170279	25
+PR checks	Collector cross-compile (darwin/arm64)	38467170279	19
+PR checks	Collector cross-compile (linux/amd64)	38467170279	61
+PR checks	Collector cross-compile (darwin/amd64)	38467170279	31
+PR checks	Collector cross-compile (windows/arm64)	38467170279	21
+PR checks	Clang tidy	38467095682	586
+PR checks	Generate BPF	38467095682	106
+PR checks	Clang format	38467095682	13
+PR checks	OTel Collector example (ocb build)	38467095682	67
+PR checks	Collector cross-compile (linux/amd64)	38467095682	77
+PR checks	Collector cross-compile (darwin/amd64)	38467095682	65
+PR checks	Collector cross-compile (darwin/arm64)	38467095682	47
+PR checks	Collector cross-compile (linux/ppc64le)	38467095682	21
+PR checks	Collector cross-compile (linux/s390x)	38467095682	27
+PR checks	Generated files and repo hygiene	38467095682	352
+PR checks	Collector cross-compile (windows/arm64)	38467095682	42
+PR checks	Collector cross-compile (windows/amd64)	38467095682	22
+PR checks	Collector cross-compile (linux/386)	38467095682	47
+PR checks	Collector cross-compile (linux/arm64)	38467095682	295
+PR checks	Generate BPF	38467041459	104
+PR checks	Clang format	38467041459	8
+PR checks	Clang tidy	38467041459	582
+PR checks	OTel Collector example (ocb build)	38467041459	208
+PR checks	Generated files and repo hygiene	38467041459	300
+PR checks	Collector cross-compile (linux/arm64)	38467041459	266
+PR checks	Collector cross-compile (linux/ppc64le)	38467041459	24
+PR checks	Collector cross-compile (windows/amd64)	38467041459	34
+PR checks	Collector cross-compile (linux/amd64)	38467041459	31
+PR checks	Collector cross-compile (windows/arm64)	38467041459	39
+PR checks	Collector cross-compile (darwin/amd64)	38467041459	22
+PR checks	Collector cross-compile (linux/386)	38467041459	32
+PR checks	Collector cross-compile (darwin/arm64)	38467041459	28
+PR checks	Collector cross-compile (linux/s390x)	38467041459	154
+PR checks	Clang tidy	38466811327	454
+PR checks	Clang format	38466811327	8
+PR checks	Generate BPF	38466811327	118
+PR checks	OTel Collector example (ocb build)	38466811327	202
+PR checks	Generated files and repo hygiene	38466811327	301
+PR checks	Collector cross-compile (windows/amd64)	38466811327	59
+PR checks	Collector cross-compile (linux/arm64)	38466811327	137
+PR checks	Collector cross-compile (linux/386)	38466811327	59
+PR checks	Collector cross-compile (linux/amd64)	38466811327	160
+PR checks	Collector cross-compile (darwin/amd64)	38466811327	34
+PR checks	Collector cross-compile (linux/s390x)	38466811327	67
+PR checks	Collector cross-compile (darwin/arm64)	38466811327	56
+PR checks	Collector cross-compile (windows/arm64)	38466811327	104
+PR checks	Collector cross-compile (linux/ppc64le)	38466811327	81
+PR checks	Clang format	38426331773	9
+PR checks	Clang tidy	38426331773	584
+PR checks	Generate BPF	38426331773	106
+PR checks	OTel Collector example (ocb build)	38426331773	172
+PR checks	Generated files and repo hygiene	38426331773	336
+PR checks	Collector cross-compile (windows/arm64)	38426331773	28
+PR checks	Collector cross-compile (linux/386)	38426331773	32
+PR checks	Collector cross-compile (linux/arm64)	38426331773	180
+PR checks	Collector cross-compile (linux/s390x)	38426331773	35
+PR checks	Collector cross-compile (linux/amd64)	38426331773	130
+PR checks	Collector cross-compile (darwin/amd64)	38426331773	40
+PR checks	Collector cross-compile (linux/ppc64le)	38426331773	27
+PR checks	Collector cross-compile (windows/amd64)	38426331773	37
+PR checks	Collector cross-compile (darwin/arm64)	38426331773	46
+PR checks	Generate BPF	38371918482	83
+PR checks	Clang format	38371918482	10
+PR checks	Clang tidy	38371918482	518
+PR checks	OTel Collector example (ocb build)	38371918482	192
+PR checks	Generated files and repo hygiene	38371918482	293
+PR checks	Collector cross-compile (linux/386)	38371918482	25
+PR checks	Collector cross-compile (linux/s390x)	38371918482	28
+PR checks	Collector cross-compile (windows/arm64)	38371918482	25
+PR checks	Collector cross-compile (linux/ppc64le)	38371918482	26
+PR checks	Collector cross-compile (darwin/amd64)	38371918482	23
+PR checks	Collector cross-compile (linux/amd64)	38371918482	61
+PR checks	Collector cross-compile (windows/amd64)	38371918482	29
+PR checks	Collector cross-compile (darwin/arm64)	38371918482	24
+PR checks	Collector cross-compile (linux/arm64)	38371918482	60
+PR checks	Clang tidy	38371744321	559
+PR checks	Clang format	38371744321	10
+PR checks	Generate BPF	38371744321	105
+PR checks	OTel Collector example (ocb build)	38371744321	194
+PR checks	Generated files and repo hygiene	38371744321	306
+PR checks	Collector cross-compile (darwin/arm64)	38371744321	27
+PR checks	Collector cross-compile (linux/arm64)	38371744321	138
+PR checks	Collector cross-compile (darwin/amd64)	38371744321	28
+PR checks	Collector cross-compile (linux/386)	38371744321	27
+PR checks	Collector cross-compile (linux/s390x)	38371744321	28
+PR checks	Collector cross-compile (linux/ppc64le)	38371744321	26
+PR checks	Collector cross-compile (windows/amd64)	38371744321	22
+PR checks	Collector cross-compile (linux/amd64)	38371744321	92
+PR checks	Collector cross-compile (windows/arm64)	38371744321	21
+PR checks	Clang format	38371685163	9
+PR checks	Clang tidy	38371685163	607
+PR checks	Generate BPF	38371685163	79
+PR checks	OTel Collector example (ocb build)	38371685163	169
+PR checks	Generated files and repo hygiene	38371685163	306
+PR checks	Collector cross-compile (linux/arm64)	38371685163	101
+PR checks	Collector cross-compile (linux/ppc64le)	38371685163	41
+PR checks	Collector cross-compile (windows/amd64)	38371685163	36
+PR checks	Collector cross-compile (darwin/amd64)	38371685163	36
+PR checks	Collector cross-compile (linux/s390x)	38371685163	36
+PR checks	Collector cross-compile (linux/386)	38371685163	37
+PR checks	Collector cross-compile (darwin/arm64)	38371685163	36
+PR checks	Collector cross-compile (linux/amd64)	38371685163	143
+PR checks	Collector cross-compile (windows/arm64)	38371685163	35
+Lint	Generate BPF	38583529978	99
+Lint	Lint on macOS	38583529978	210
+Lint	Lint on linux (arm64)	38583529978	88
+Lint	Lint on linux (amd64)	38583529978	378
+Lint	Generate BPF	38583321954	105
+Lint	Lint on macOS	38583321954	139
+Lint	Lint on linux (amd64)	38583321954	482
+Lint	Lint on linux (arm64)	38583321954	86
+Lint	Generate BPF	38581302945	86
+Lint	Lint on macOS	38581302945	485
+Lint	Lint on linux (arm64)	38581302945	261
+Lint	Lint on linux (amd64)	38581302945	484
+Lint	Generate BPF	38563460355	107
+Lint	Lint on linux (arm64)	38563460355	247
+Lint	Lint on macOS	38563460355	353
+Lint	Lint on linux (amd64)	38563460355	472
+Lint	Generate BPF	38551978943	117
+Lint	Lint on linux (arm64)	38551978943	206
+Lint	Lint on linux (amd64)	38551978943	352
+Lint	Lint on macOS	38551978943	234
+Lint	Generate BPF	38530580671	124
+Lint	Lint on linux (amd64)	38530580671	363
+Lint	Lint on macOS	38530580671	542
+Lint	Lint on linux (arm64)	38530580671	226
+Lint	Generate BPF	38522410888	98
+Lint	Lint on macOS	38522410888	564
+Lint	Lint on linux (arm64)	38522410888	232
+Lint	Lint on linux (amd64)	38522410888	500
+Lint	Generate BPF	38522328058	84
+Lint	Lint on linux (arm64)	38522328058	239
+Lint	Lint on macOS	38522328058	439
+Lint	Lint on linux (amd64)	38522328058	325
+Lint	Generate BPF	38522311399	103
+Lint	Lint on linux (arm64)	38522311399	257
+Lint	Lint on linux (amd64)	38522311399	471
+Lint	Lint on macOS	38522311399	322
+Lint	Generate BPF	38477651263	92
+Lint	Lint on linux (amd64)	38477651263	475
+Lint	Lint on linux (arm64)	38477651263	254
+Lint	Lint on macOS	38477651263	531
+Lint	Generate BPF	38467619822	105
+Lint	Lint on macOS	38467619822	257
+Lint	Lint on linux (amd64)	38467619822	483
+Lint	Lint on linux (arm64)	38467619822	149
+Lint	Generate BPF	38467170158	162
+Lint	Lint on macOS	38467170158	554
+Lint	Lint on linux (amd64)	38467170158	405
+Lint	Lint on linux (arm64)	38467170158	86
+Lint	Generate BPF	38467095857	105
+Lint	Lint on macOS	38467095857	493
+Lint	Lint on linux (amd64)	38467095857	495
+Lint	Lint on linux (arm64)	38467095857	171
+Lint	Generate BPF	38467041321	112
+Lint	Lint on macOS	38467041321	576
+Lint	Lint on linux (amd64)	38467041321	579
+Lint	Lint on linux (arm64)	38467041321	367
+Lint	Generate BPF	38426331849	93
+Lint	Lint on macOS	38426331849	574
+Lint	Lint on linux (arm64)	38426331849	274
+Lint	Lint on linux (amd64)	38426331849	354
+Lint	Generate BPF	38371918593	99
+Lint	Lint on linux (amd64)	38371918593	439
+Lint	Lint on macOS	38371918593	367
+Lint	Lint on linux (arm64)	38371918593	212
+Lint	Generate BPF	38371744343	107
+Lint	Lint on linux (amd64)	38371744343	392
+Lint	Lint on linux (arm64)	38371744343	221
+Lint	Lint on macOS	38371744343	308
+Lint	Generate BPF	38371685148	109
+Lint	Lint on linux (amd64)	38371685148	351
+Lint	Lint on linux (arm64)	38371685148	209
+Lint	Lint on macOS	38371685148	425
+Lint	Generate BPF	38371635701	109
+Lint	Lint on macOS	38371635701	454
+Lint	Lint on linux (arm64)	38371635701	203
+Lint	Lint on linux (amd64)	38371635701	434
+Lint	Generate BPF	38348999816	103
+Lint	Lint on macOS	38348999816	448
+Lint	Lint on linux (arm64)	38348999816	257
+Lint	Lint on linux (amd64)	38348999816	356
+Unit tests	Generate BPF	38583649488	98
+Unit tests	Build test matrix	38583649488	29
+Unit tests	Unit tests #2 (arm64)	38583649488	170
+Unit tests	Unit tests #1 (arm64)	38583649488	81
+Unit tests	Unit tests #0 (arm64)	38583649488	184
+Unit tests	Unit tests #1 (amd64)	38583649488	340
+Unit tests	Unit tests #0 (amd64)	38583649488	387
+Unit tests	Unit tests #2 (amd64)	38583649488	343
+Unit tests	Build test matrix	38583529787	27
+Unit tests	Generate BPF	38583529787	95
+Unit tests	Unit tests #1 (arm64)	38583529787	81
+Unit tests	Unit tests #0 (amd64)	38583529787	289
+Unit tests	Unit tests #0 (arm64)	38583529787	193
+Unit tests	Unit tests #2 (amd64)	38583529787	336
+Unit tests	Unit tests #2 (arm64)	38583529787	160
+Unit tests	Unit tests #1 (amd64)	38583529787	262
+Unit tests	Build test matrix	38583322207	28
+Unit tests	Generate BPF	38583322207	98
+Unit tests	Unit tests #1 (arm64)	38583322207	82
+Unit tests	Unit tests #0 (amd64)	38583322207	414
+Unit tests	Unit tests #0 (arm64)	38583322207	177
+Unit tests	Unit tests #2 (amd64)	38583322207	349
+Unit tests	Unit tests #1 (amd64)	38583322207	273
+Unit tests	Unit tests #2 (arm64)	38583322207	176
+Unit tests	Generate BPF	38581302970	100
+Unit tests	Build test matrix	38581302970	25
+Unit tests	Unit tests #2 (arm64)	38581302970	248
+Unit tests	Unit tests #0 (amd64)	38581302970	325
+Unit tests	Unit tests #1 (amd64)	38581302970	347
+Unit tests	Unit tests #2 (amd64)	38581302970	370
+Unit tests	Unit tests #0 (arm64)	38581302970	289
+Unit tests	Unit tests #1 (arm64)	38581302970	248
+Unit tests	Build test matrix	38563460283	27
+Unit tests	Generate BPF	38563460283	105
+Unit tests	Unit tests #2 (arm64)	38563460283	270
+Unit tests	Unit tests #2 (amd64)	38563460283	292
+Unit tests	Unit tests #1 (amd64)	38563460283	358
+Unit tests	Unit tests #1 (arm64)	38563460283	252
+Unit tests	Unit tests #0 (amd64)	38563460283	422
+Unit tests	Unit tests #0 (arm64)	38563460283	433
+Unit tests	Generate BPF	38551978891	112
+Unit tests	Build test matrix	38551978891	26
+Unit tests	Unit tests #2 (arm64)	38551978891	228
+Unit tests	Unit tests #1 (arm64)	38551978891	249
+Unit tests	Unit tests #2 (amd64)	38551978891	151
+Unit tests	Unit tests #0 (amd64)	38551978891	196
+Unit tests	Unit tests #0 (arm64)	38551978891	315
+Unit tests	Unit tests #1 (amd64)	38551978891	171
+Unit tests	Build test matrix	38530580400	26
+Unit tests	Generate BPF	38530580400	128
+Unit tests	Unit tests #2 (arm64)	38530580400	110
+Unit tests	Unit tests #2 (amd64)	38530580400	131
+Unit tests	Unit tests #0 (amd64)	38530580400	219
+Unit tests	Unit tests #1 (amd64)	38530580400	172
+Unit tests	Unit tests #1 (arm64)	38530580400	146
+Unit tests	Unit tests #0 (arm64)	38530580400	201
+Unit tests	Build test matrix	38522410807	25
+Unit tests	Generate BPF	38522410807	105
+Unit tests	Unit tests #0 (arm64)	38522410807	324
+Unit tests	Unit tests #1 (arm64)	38522410807	234
+Unit tests	Unit tests #1 (amd64)	38522410807	344
+Unit tests	Unit tests #2 (amd64)	38522410807	240
+Unit tests	Unit tests #2 (arm64)	38522410807	201
+Unit tests	Unit tests #0 (amd64)	38522410807	438
+Unit tests	Unit tests #0 (amd64)	38522328056	451
+Unit tests	Generate BPF	38522328056	105
+Unit tests	Unit tests #2 (amd64)	38522328056	245
+Unit tests	Unit tests #0 (arm64)	38522328056	315
+Unit tests	Unit tests #2 (arm64)	38522328056	216
+Unit tests	Unit tests #1 (arm64)	38522328056	243
+Unit tests	Unit tests #1 (amd64)	38522328056	362
+Unit tests	Build test matrix	38522328056	27
+Unit tests	Generate BPF	38522311336	104
+Unit tests	Build test matrix	38522311336	27
+Unit tests	Unit tests #0 (arm64)	38522311336	301
+Unit tests	Unit tests #2 (arm64)	38522311336	216
+Unit tests	Unit tests #1 (amd64)	38522311336	350
+Unit tests	Unit tests #0 (amd64)	38522311336	315
+Unit tests	Unit tests #1 (arm64)	38522311336	255
+Unit tests	Unit tests #2 (amd64)	38522311336	249
+Unit tests	Generate BPF	38477651109	111
+Unit tests	Build test matrix	38477651109	27
+Unit tests	Unit tests #2 (amd64)	38477651109	295
+Unit tests	Unit tests #0 (arm64)	38477651109	319
+Unit tests	Unit tests #1 (amd64)	38477651109	354
+Unit tests	Unit tests #2 (arm64)	38477651109	225
+Unit tests	Unit tests #1 (arm64)	38477651109	249
+Unit tests	Unit tests #0 (amd64)	38477651109	435
+Unit tests	Generate BPF	38467619961	105
+Unit tests	Build test matrix	38467619961	21
+Unit tests	Unit tests #1 (arm64)	38467619961	355
+Unit tests	Unit tests #2 (arm64)	38467619961	234
+Unit tests	Unit tests #1 (amd64)	38467619961	372
+Unit tests	Unit tests #0 (amd64)	38467619961	521
+Unit tests	Unit tests #0 (arm64)	38467619961	314
+Unit tests	Unit tests #2 (amd64)	38467619961	311
+Unit tests	Build test matrix	38467170626	53
+Unit tests	Generate BPF	38467170626	245
+Unit tests	Unit tests #2 (arm64)	38467170626	219
+Unit tests	Unit tests #1 (amd64)	38467170626	268
+Unit tests	Unit tests #1 (arm64)	38467170626	259
+Unit tests	Unit tests #0 (amd64)	38467170626	465
+Unit tests	Unit tests #0 (arm64)	38467170626	327
+Unit tests	Unit tests #2 (amd64)	38467170626	321
+Unit tests	Build test matrix	38467095988	28
+Unit tests	Generate BPF	38467095988	210
+Unit tests	Unit tests #2 (amd64)	38467095988	235
+Unit tests	Unit tests #1 (amd64)	38467095988	445
+Unit tests	Unit tests #0 (arm64)	38467095988	330
+Unit tests	Unit tests #2 (arm64)	38467095988	305
+Unit tests	Unit tests #1 (arm64)	38467095988	264
+Unit tests	Unit tests #0 (amd64)	38467095988	543
+Unit tests	Build test matrix	38467041352	88
+Unit tests	Generate BPF	38467041352	109
+Unit tests	Unit tests #2 (amd64)	38467041352	353
+Unit tests	Unit tests #0 (amd64)	38467041352	370
+Unit tests	Unit tests #2 (arm64)	38467041352	223
+Unit tests	Unit tests #1 (arm64)	38467041352	305
+Unit tests	Unit tests #0 (arm64)	38467041352	328
+Unit tests	Unit tests #1 (amd64)	38467041352	345
+Unit tests	Build test matrix	38466811614	28
+Unit tests	Generate BPF	38466811614	120
+Unit tests	Unit tests #0 (amd64)	38466811614	616
+Unit tests	Unit tests #2 (amd64)	38466811614	225
+Unit tests	Unit tests #2 (arm64)	38466811614	247
+Unit tests	Unit tests #1 (amd64)	38466811614	400
+Unit tests	Unit tests #0 (arm64)	38466811614	336
+Unit tests	Unit tests #1 (arm64)	38466811614	260
+Unit tests	Build test matrix	38426332009	22
+Unit tests	Generate BPF	38426332009	106
+Unit tests	Unit tests #0 (amd64)	38426332009	361
+Unit tests	Unit tests #0 (arm64)	38426332009	327
+Unit tests	Unit tests #1 (arm64)	38426332009	254
+Unit tests	Unit tests #1 (amd64)	38426332009	375
+Unit tests	Unit tests #2 (arm64)	38426332009	212
+Unit tests	Unit tests #2 (amd64)	38426332009	316
+Unit tests	Generate BPF	38371918826	99
+Unit tests	Build test matrix	38371918826	26
+Unit tests	Unit tests #2 (amd64)	38371918826	219
+Unit tests	Unit tests #1 (amd64)	38371918826	266
+Unit tests	Unit tests #0 (amd64)	38371918826	410
+Unit tests	Unit tests #0 (arm64)	38371918826	236
+Unit tests	Unit tests #1 (arm64)	38371918826	166
+Unit tests	Unit tests #2 (arm64)	38371918826	136
+Unit tests	Build test matrix	38371744373	20
+Unit tests	Generate BPF	38371744373	105
+Unit tests	Unit tests #0 (amd64)	38371744373	409
+Unit tests	Unit tests #1 (arm64)	38371744373	134
+Unit tests	Unit tests #1 (amd64)	38371744373	225
+Unit tests	Unit tests #2 (amd64)	38371744373	277
+Unit tests	Unit tests #2 (arm64)	38371744373	70
+Unit tests	Unit tests #0 (arm64)	38371744373	203
+Unit tests	Generate BPF	38371685161	104
+Unit tests	Build test matrix	38371685161	24
+Unit tests	Unit tests #1 (arm64)	38371685161	135
+Unit tests	Unit tests #0 (arm64)	38371685161	186
+Unit tests	Unit tests #2 (amd64)	38371685161	216
+Unit tests	Unit tests #2 (arm64)	38371685161	49
+Unit tests	Unit tests #1 (amd64)	38371685161	226
+Unit tests	Unit tests #0 (amd64)	38371685161	414
+BPF unit tests	BPF unit tests (amd64)	38583649392	18
+BPF unit tests	BPF unit tests (arm64)	38583649392	36
+BPF unit tests	BPF unit tests (arm64)	38583529777	28
+BPF unit tests	BPF unit tests (amd64)	38583529777	28
+BPF unit tests	BPF unit tests (arm64)	38583322152	26
+BPF unit tests	BPF unit tests (amd64)	38583322152	26
+BPF unit tests	BPF unit tests (amd64)	38581303442	20
+BPF unit tests	BPF unit tests (arm64)	38581303442	25
+BPF unit tests	BPF unit tests (arm64)	38563460325	28
+BPF unit tests	BPF unit tests (amd64)	38563460325	18
+BPF unit tests	BPF unit tests (arm64)	38551978870	25
+BPF unit tests	BPF unit tests (amd64)	38551978870	21
+BPF unit tests	BPF unit tests (amd64)	38530580551	32
+BPF unit tests	BPF unit tests (arm64)	38530580551	23
+BPF unit tests	BPF unit tests (amd64)	38522410891	28
+BPF unit tests	BPF unit tests (arm64)	38522410891	23
+BPF unit tests	BPF unit tests (amd64)	38522328207	18
+BPF unit tests	BPF unit tests (arm64)	38522328207	25
+BPF unit tests	BPF unit tests (amd64)	38522311311	27
+BPF unit tests	BPF unit tests (arm64)	38522311311	24
+BPF unit tests	BPF unit tests (amd64)	38477651230	61
+BPF unit tests	BPF unit tests (arm64)	38477651230	23
+BPF unit tests	BPF unit tests (amd64)	38467619593	33
+BPF unit tests	BPF unit tests (arm64)	38467619593	20
+BPF unit tests	BPF unit tests (amd64)	38467170886	46
+BPF unit tests	BPF unit tests (arm64)	38467170886	46
+BPF unit tests	BPF unit tests (arm64)	38467096077	27
+BPF unit tests	BPF unit tests (amd64)	38467096077	25
+BPF unit tests	BPF unit tests (arm64)	38467041360	32
+BPF unit tests	BPF unit tests (amd64)	38467041360	53
+BPF unit tests	BPF unit tests (arm64)	38466811434	51
+BPF unit tests	BPF unit tests (amd64)	38466811434	41
+BPF unit tests	BPF unit tests (arm64)	38426332163	21
+BPF unit tests	BPF unit tests (amd64)	38426332163	37
+BPF unit tests	BPF unit tests (arm64)	38371918382	26
+BPF unit tests	BPF unit tests (amd64)	38371918382	25
+BPF unit tests	BPF unit tests (amd64)	38371744306	23
+BPF unit tests	BPF unit tests (arm64)	38371744306	19
+BPF unit tests	BPF unit tests (amd64)	38371685151	21
+BPF unit tests	BPF unit tests (arm64)	38371685151	19

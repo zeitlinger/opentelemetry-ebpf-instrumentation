@@ -1,0 +1,30 @@
+mode=main
+commit=a6207d767125db2355710502542451cc4b474d96
+start_utc=2026-10-14T11:47:40Z
+docker=29.1.3
+generated_outputs_before=0
+image=sha256:1ae9406f2566e32ccf5d8ba8e5ff0586a322300ae82870988ad605429021174a
+task_exit=0
+task_duration_ns=46734001521
+end_utc=2026-10-14T11:48:27Z
+generated_outputs_after=60
+go: downloading github.com/go-openapi/swag/fileutils v0.29.2
+go: downloading github.com/go-openapi/swag/fileutils v0.29.2
+go: downloading github.com/go-openapi/swag/jsonutils v0.29.2
+go: downloading github.com/go-openapi/swag/jsonutils v0.29.2
+go: downloading github.com/go-openapi/swag/loading v0.29.2
+go: downloading github.com/go-openapi/swag/loading v0.29.2
+go: downloading github.com/go-openapi/swag/mangling v0.29.2
+go: downloading github.com/go-openapi/swag/mangling v0.29.2
+go: downloading github.com/go-openapi/swag/netutils v0.29.2
+go: downloading github.com/go-openapi/swag/netutils v0.29.2
+go: downloading github.com/go-openapi/swag/stringutils v0.29.2
+go: downloading github.com/go-openapi/swag/stringutils v0.29.2
+go: downloading github.com/go-openapi/swag/typeutils v0.29.2
+go: downloading github.com/go-openapi/swag/typeutils v0.29.2
+go: downloading github.com/go-openapi/swag/yamlutils v0.29.2
+go: downloading github.com/go-openapi/swag/yamlutils v0.29.2
+go: downloading github.com/moby/spdystream v0.5.1
+go: downloading github.com/moby/spdystream v0.5.1
+go: downloading github.com/go-openapi/swag/pools v0.29.2
+go: downloading github.com/go-openapi/swag/pools v0.29.2

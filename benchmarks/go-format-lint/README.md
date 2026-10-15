@@ -2,6 +2,16 @@
 
 Five warm, serial trials compared the legacy Make entry points with the Mise task graph on identical OBI application source.
 
+**Update 2026-10-15:** [PR #3729](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/pull/3729) now runs golangci-lint after collectt (`wait_for`). In CI, running both at once made each recompute the type-check data the other would reuse, which slowed the lint jobs down. With that order Mise runs lint like `make -j8` does, and the local gain is gone:
+
+| Timed path | Median | Five raw times (seconds) |
+| --- | ---: | --- |
+| `make -j8 fmt && make -j8 lint` | 7.491 s | 8.059, 7.491, 7.234, 8.335, 7.300 |
+| `mise run fmt && mise run lint` (parallel, as above) | 5.283 s | 6.732, 5.124, 5.273, 7.320, 5.283 |
+| `mise run fmt && mise run lint` with `wait_for` | 7.069 s | 8.855, 6.278, 7.069, 8.307, 6.449 |
+
+Same worktrees and per-variant isolated caches as below, one warmup each, five alternating trials; the host had other load, hence the wider spread. Script and raw times: `wait-for-2026-10-15/`. The tables below are the original run.
+
 | Timed path | Median | Five raw times (seconds) |
 | --- | ---: | --- |
 | `make fmt && make lint` | 7.246 s | 7.978, 7.246, 7.219, 7.152, 7.309 |

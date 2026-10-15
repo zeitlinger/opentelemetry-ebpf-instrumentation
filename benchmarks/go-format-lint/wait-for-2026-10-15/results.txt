@@ -1,0 +1,15 @@
+make-j8 8.059
+mise 6.732
+mise-waitfor 8.855
+make-j8 7.491
+mise 5.124
+mise-waitfor 6.278
+make-j8 7.234
+mise 5.273
+mise-waitfor 7.069
+make-j8 8.335
+mise 7.320
+mise-waitfor 8.307
+make-j8 7.300
+mise 5.283
+mise-waitfor 6.449

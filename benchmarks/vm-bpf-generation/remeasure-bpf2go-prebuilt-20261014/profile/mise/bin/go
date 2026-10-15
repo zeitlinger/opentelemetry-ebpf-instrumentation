@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+start=$(date +%s%N)
+"$REAL_GO" "$@"
+rc=$?
+end=$(date +%s%N)
+printf 'go elapsed_ns=%s pid=%s args=%q\n' "$((end-start))" "$$" "$*" >> "$PROFILE_DIR/mise-go.log"
+exit "$rc"

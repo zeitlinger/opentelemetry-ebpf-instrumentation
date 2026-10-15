@@ -1,0 +1,108 @@
+mise by @jdx – installing 8 tools
+mise ✓ markdownlint-cli2@0.23.3                                           1.1s
+mise ██░░░░░░░░░░░░░░ 1/8 · 3.0s
+  go@1.27.1                                                          downloading              3.0s  11.6/70.6 MB · 4.8 MB/s
+  clang@22.1.8                                                       downloading 29 packages  3.0s
+  clang-format@22.1.8                                                downloading 14 packages  3.0s
+  golangci-lint@2.13.2                                               downloading              3.0s  0.7/15.5 MB · 416 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  3.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              3.0s  0.7/80.2 MB · 408 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              3.0s  0.7/9.8 MB · 376 kB/s
+mise ███░░░░░░░░░░░░░ 1/8 · 6.0s
+  go@1.27.1                                                          downloading              6.0s  34.8/70.6 MB · 6.4 MB/s
+  clang@22.1.8                                                       downloading 29 packages  6.0s
+  clang-format@22.1.8                                                downloading 14 packages  6.0s
+  golangci-lint@2.13.2                                               downloading              6.0s  2.1/15.5 MB · 437 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  6.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              6.0s  2.0/80.2 MB · 431 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              6.0s  2.1/9.8 MB · 421 kB/s
+mise ███░░░░░░░░░░░░░ 1/8 · 9.0s
+  go@1.27.1                                                          downloading              9.0s  60.2/70.6 MB · 7.2 MB/s
+  clang@22.1.8                                                       downloading 29 packages  9.0s
+  clang-format@22.1.8                                                downloading 14 packages  9.0s
+  golangci-lint@2.13.2                                               downloading              9.0s  3.1/15.5 MB · 398 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  9.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              9.0s  3.1/80.2 MB · 396 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              9.0s  3.1/9.8 MB · 391 kB/s
+mise go@1.27.1 go version go1.27.1 linux/amd64
+mise ✓ go@1.27.1                                                          11.9s  go1.27.1.linux-amd64.tar.gz
+mise █████░░░░░░░░░░░ 2/8 · 12.0s
+  clang@22.1.8                                                       downloading 29 packages  12.0s
+  clang-format@22.1.8                                                downloading 14 packages  12.0s
+  golangci-lint@2.13.2                                               downloading              12.0s  4.7/15.5 MB · 438 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  12.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              12.0s  4.7/80.2 MB · 435 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              12.0s  4.7/9.8 MB · 431 kB/s
+mise █████░░░░░░░░░░░ 2/8 · 15.0s
+  clang@22.1.8                                                       downloading 29 packages  15.0s
+  clang-format@22.1.8                                                downloading 14 packages  15.0s
+  golangci-lint@2.13.2                                               downloading              15.0s  6.4/15.5 MB · 465 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  15.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              15.0s  6.4/80.2 MB · 463 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              15.0s  6.4/9.8 MB · 458 kB/s
+mise ██████░░░░░░░░░░ 2/8 · 18.0s
+  clang@22.1.8                                                       downloading 29 packages  18.0s
+  clang-format@22.1.8                                                downloading 14 packages  18.0s
+  golangci-lint@2.13.2                                               downloading              18.0s  8.1/15.5 MB · 482 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  18.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              18.0s  8.1/80.2 MB · 483 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              18.0s  8.1/9.8 MB · 478 kB/s
+mise ██████░░░░░░░░░░ 2/8 · 21.0s
+  clang@22.1.8                                                       downloading 29 packages  21.0s
+  clang-format@22.1.8                                                downloading 14 packages  21.0s
+  golangci-lint@2.13.2                                               downloading              21.0s  9.7/15.5 MB · 491 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  21.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              21.0s  9.7/80.2 MB · 491 kB/s
+  github:open-telemetry/weaver@0.27.0                                downloading              21.0s  9.7/9.8 MB · 487 kB/s
+mise ✓ github:open-telemetry/weaver@0.27.0                                22.1s  weaver-x86_64-unknown-linux-gnu.tar.xz
+mise ███████░░░░░░░░░ 3/8 · 24.0s
+  clang@22.1.8                                                       downloading 29 packages  24.0s
+  clang-format@22.1.8                                                downloading 14 packages  24.0s
+  golangci-lint@2.13.2                                               downloading              24.0s  11.7/15.5 MB · 513 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  24.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              24.0s  11.6/80.2 MB · 508 kB/s
+mise ███████░░░░░░░░░ 3/8 · 27.0s
+  clang@22.1.8                                                       downloading 29 packages  27.0s
+  clang-format@22.1.8                                                downloading 14 packages  27.0s
+  golangci-lint@2.13.2                                               downloading              27.0s  13.2/15.5 MB · 512 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  27.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              27.0s  13.0/80.2 MB · 506 kB/s
+mise ███████░░░░░░░░░ 3/8 · 30.0s
+  clang@22.1.8                                                       downloading 29 packages  30.0s
+  clang-format@22.1.8                                                downloading 14 packages  30.0s
+  golangci-lint@2.13.2                                               downloading              30.0s  14.7/15.5 MB · 512 kB/s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  30.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              30.0s  14.6/80.2 MB · 509 kB/s
+mise ✓ golangci-lint@2.13.2                                               31.6s  golangci-lint-2.13.2-linux-amd64.tar.gz
+mise ████████░░░░░░░░ 4/8 · 33.0s
+  clang@22.1.8                                                       downloading 29 packages  33.0s
+  clang-format@22.1.8                                                downloading 14 packages  33.0s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  33.0s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              33.0s  16.9/80.2 MB · 533 kB/s
+mise ████████░░░░░░░░ 4/8 · 36.3s
+  clang@22.1.8                                                       downloading 29 packages  36.3s
+  clang-format@22.1.8                                                downloading 14 packages  36.3s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  36.3s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              36.3s  21.6/80.2 MB · 617 kB/s
+mise ████████░░░░░░░░ 4/8 · 39.9s
+  clang@22.1.8                                                       downloading 29 packages  39.9s
+  clang-format@22.1.8                                                downloading 14 packages  39.9s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  39.9s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              39.9s  26.3/80.2 MB · 681 kB/s
+mise ████████░░░░░░░░ 4/8 · 43.9s
+  clang@22.1.8                                                       downloading 29 packages  43.9s
+  clang-format@22.1.8                                                downloading 14 packages  43.9s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  43.9s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              43.9s  34.4/80.2 MB · 806 kB/s
+mise ████████░░░░░░░░ 4/8 · 48.3s
+  clang@22.1.8                                                       downloading 29 packages  48.3s
+  clang-format@22.1.8                                                downloading 14 packages  48.3s
+  conda:llvm-tools@22.1.8                                            downloading 14 packages  48.3s
+  github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  downloading              48.3s  54.0/80.2 MB · 1.1 MB/s
+mise ✓ clang-format@22.1.8                                                51.6s
+mise ✓ conda:llvm-tools@22.1.8                                            51.6s
+mise ✓ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  52.4s  clang-tidy-22_linux-amd64
+mise ██████████████░░ 7/8 · 53.2s
+  clang@22.1.8                                                       installing libllvm22-22.1.8-h474f4eb_3.conda  53.1s
+mise ✓ clang@22.1.8                                                       54.1s
+mise ████████████████ 8/8 · installed 8 tools in 54.1s

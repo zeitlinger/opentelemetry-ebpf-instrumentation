@@ -1,0 +1,31 @@
+mise by @jdx – installing 8 tools
+mise ✗ markdownlint-cli2@0.23.3                                           352ms · failed: aube install failed: install aborted: failed to import micromark-util-classify-character@2.0.1: I/O error at /home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-cache/npm/aube/store/v1/files/7a/dcd76795549d0d5b6f3fe11f613938888c204859a1244c2ac0ecad7f9eefa6: No space left on device (os error 28)
+mise ✗ conda:llvm-tools@22.1.8                                            414ms · failed: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/conda-packages/.mise-download-state.JJjWy7"
+mise ✗ clang-format@22.1.8                                                414ms · failed: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/conda-packages/.mise-download-state.Da7qiZ"
+mise ✗ go@1.27.1                                                          568ms · failed: No space left on device (os error 28)
+mise ✗ clang@22.1.8                                                       636ms · failed: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/conda-packages/.mise-download-state.5hTtR4"
+mise ✗ golangci-lint@2.13.2                                               1.2s · failed: No space left on device (os error 28)
+mise ✗ github:open-telemetry/weaver@0.27.0                                1.3s · failed: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/downloads/github-open-telemetry-weaver/0.27.0/.mise-download-state.PCSMIY"
+mise ✗ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  1.3s · failed: No space left on device (os error 28)
+mise ████████████████ 8/8 · installed 0 tools · 8 failed in 1.3s
+mise ERROR Failed to install tools: aqua:golangci/golangci-lint@2.13.2, conda:clang-format@22.1.8, conda:clang@22.1.8, conda:llvm-tools@22.1.8, core:go@1.27.1, github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d, github:open-telemetry/weaver@0.27.0, npm:markdownlint-cli2@0.23.3
+
+aqua:golangci/golangci-lint@2.13.2: No space left on device (os error 28)
+
+conda:clang-format@22.1.8: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/conda-packages/.mise-download-state.Da7qiZ"
+
+conda:clang@22.1.8: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/conda-packages/.mise-download-state.5hTtR4"
+
+conda:llvm-tools@22.1.8: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/conda-packages/.mise-download-state.JJjWy7"
+
+core:go@1.27.1: No space left on device (os error 28)
+
+github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d: No space left on device (os error 28)
+
+github:open-telemetry/weaver@0.27.0: No space left on device (os error 28) at path "/home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/downloads/github-open-telemetry-weaver/0.27.0/.mise-download-state.PCSMIY"
+
+npm:markdownlint-cli2@0.23.3: aube install failed: install aborted: failed to import micromark-util-classify-character@2.0.1: I/O error at /home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-cache/npm/aube/store/v1/files/7a/dcd76795549d0d5b6f3fe11f613938888c204859a1244c2ac0ecad7f9eefa6: No space left on device (os error 28)
+  caused by: create /home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/installs/markdownlint-cli2/0.23.3~aube~ef00eeef1266878f/node_modules/.mise: file error: No space left on device (os error 28)
+File: /home/gregor/obi-bench/task1/setup-only/mise-install-05/mise-data/installs/markdownlint-cli2/0.23.3~aube~ef00eeef1266878f/node_modules/.mise
+mise ERROR Version: 2026.9.16 linux-x64 (2026-09-28)
+mise ERROR Run with --verbose or MISE_VERBOSE=1 for more information

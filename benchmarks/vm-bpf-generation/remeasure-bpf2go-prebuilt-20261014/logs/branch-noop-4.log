@@ -1,0 +1,1 @@
+[//:generate] $ BPF2GO=bpf2go make -f bpf/Makefile generate

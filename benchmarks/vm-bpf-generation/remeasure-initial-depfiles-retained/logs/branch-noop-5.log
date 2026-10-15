@@ -1,0 +1,1 @@
+[//:generate] $ make -f bpf/Makefile generate

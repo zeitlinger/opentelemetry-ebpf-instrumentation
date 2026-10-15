@@ -1,0 +1,14 @@
+mise by @jdx – installing 9 tools
+mise ⇢ go@1.27.2                                                          1ms · already installed
+mise ⇢ clang@22.1.8                                                       0ms · already installed
+mise ⇢ clang-format@22.1.8                                                0ms · already installed
+mise ⇢ golangci-lint@2.14.0                                               0ms · already installed
+mise ⇢ markdownlint-cli2@0.23.3                                           0ms · already installed
+mise ⇢ conda:llvm-tools@22.1.8                                            0ms · already installed
+mise ⇢ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  0ms · already installed
+mise ⇢ github:open-telemetry/weaver@0.27.0                                0ms · already installed
+mise go:github.com/cilium/ebpf/cmd/bpf2go@0.22.0 go: downloading golang.org/x/sys v0.43.0
+mise ██████████████░░ 8/9 · 3.0s
+  go:github.com/cilium/ebpf/cmd/bpf2go@0.22.0                        installing  3.0s
+mise ✓ go:github.com/cilium/ebpf/cmd/bpf2go@0.22.0                        3.1s
+mise ████████████████ 9/9 · installed 1 tool · 8 already installed in 3.1s

@@ -1,0 +1,8 @@
+#!/bin/sh
+start=$(awk '{printf "%.2f", $1}' /proc/uptime)
+/usr/local/go/bin/go "$@"
+rc=$?
+end=$(awk '{printf "%.2f", $1}' /proc/uptime)
+elapsed=$(awk -v s="$start" -v e="$end" 'BEGIN {printf "%.0f", (e-s)*1000000000}')
+printf 'go elapsed_ns=%s pid=%s args=%s\n' "$elapsed" "$$" "$*" >> /profile/docker-go.log
+exit "$rc"

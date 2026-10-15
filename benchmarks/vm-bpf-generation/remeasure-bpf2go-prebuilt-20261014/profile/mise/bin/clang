@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+start=$(date +%s%N)
+"$REAL_CLANG" "$@"
+rc=$?
+end=$(date +%s%N)
+printf 'clang elapsed_ns=%s pid=%s source=%q\n' "$((end-start))" "$$" "${@: -1}" >> "$PROFILE_DIR/mise-clang.log"
+exit "$rc"

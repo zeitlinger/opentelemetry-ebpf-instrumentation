@@ -1,0 +1,11 @@
+mise by @jdx – installing 8 tools
+mise ⇢ go@1.27.2                                                          1ms · already installed
+mise ⇢ clang@22.1.8                                                       0ms · already installed
+mise ⇢ clang-format@22.1.8                                                0ms · already installed
+mise ⇢ golangci-lint@2.14.0                                               0ms · already installed
+mise ⇢ markdownlint-cli2@0.23.3                                           0ms · already installed
+mise ⇢ conda:llvm-tools@22.1.8                                            0ms · already installed
+mise ⇢ github:cpp-linter/clang-tools-static-binaries@2026.09.01-5fb8802d  0ms · already installed
+mise ⇢ github:open-telemetry/weaver@0.27.0                                0ms · already installed
+mise ████████████████ 8/8 · installed 0 tools · 8 already installed in 2ms
+mise all tools are installed

@@ -1,0 +1,49 @@
+0.2.17: Pulling from open-telemetry/obi-generator
+55afa1ecc21d: Pulling fs layer
+d80890e20a4f: Pulling fs layer
+110c371c909e: Pulling fs layer
+889f5290fe8e: Pulling fs layer
+0017fadfb523: Pulling fs layer
+4bcdea8eddcc: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+9c6c2428769b: Pulling fs layer
+9584d2726702: Pulling fs layer
+394621e86e9a: Pulling fs layer
+daee4590c947: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+9d63fea9a9ac: Pulling fs layer
+ec8ab6438791: Pulling fs layer
+1b7277493cf3: Pulling fs layer
+44136fa355b3: Download complete
+0b00c8eb5847: Download complete
+55afa1ecc21d: Download complete
+1b7277493cf3: Download complete
+4f4fb700ef54: Download complete
+9d63fea9a9ac: Download complete
+4bcdea8eddcc: Download complete
+55afa1ecc21d: Pull complete
+9c6c2428769b: Download complete
+ec8ab6438791: Download complete
+d80890e20a4f: Download complete
+0017fadfb523: Download complete
+9584d2726702: Download complete
+9584d2726702: Pull complete
+394621e86e9a: Download complete
+daee4590c947: Download complete
+9d63fea9a9ac: Pull complete
+4bcdea8eddcc: Pull complete
+9c6c2428769b: Pull complete
+ec8ab6438791: Pull complete
+daee4590c947: Pull complete
+110c371c909e: Download complete
+889f5290fe8e: Download complete
+4f4fb700ef54: Pull complete
+d80890e20a4f: Pull complete
+394621e86e9a: Pull complete
+889f5290fe8e: Pull complete
+1b7277493cf3: Pull complete
+0017fadfb523: Pull complete
+110c371c909e: Pull complete
+Digest: sha256:1ae9406f2566e32ccf5d8ba8e5ff0586a322300ae82870988ad605429021174a
+Status: Downloaded newer image for ghcr.io/open-telemetry/obi-generator:0.2.17
+ghcr.io/open-telemetry/obi-generator:0.2.17

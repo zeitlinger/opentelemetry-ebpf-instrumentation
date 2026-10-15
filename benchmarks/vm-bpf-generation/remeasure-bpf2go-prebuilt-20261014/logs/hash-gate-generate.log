@@ -1,0 +1,4 @@
+[//:generate] $ BPF2GO=bpf2go make -f bpf/Makefile generate
+make[1]: Entering directory '/home/gregor/obi-bench/task3/remeasure-final-20261014/branch'
+Generating all BPF files (amd64 arm64)...
+make[1]: Leaving directory '/home/gregor/obi-bench/task3/remeasure-final-20261014/branch'

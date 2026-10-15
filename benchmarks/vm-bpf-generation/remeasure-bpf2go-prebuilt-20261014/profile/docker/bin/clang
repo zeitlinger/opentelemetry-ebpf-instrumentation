@@ -1,0 +1,8 @@
+#!/bin/sh
+start=$(awk '{printf "%.2f", $1}' /proc/uptime)
+/usr/lib/llvm22/bin/clang "$@"
+rc=$?
+end=$(awk '{printf "%.2f", $1}' /proc/uptime)
+elapsed=$(awk -v s="$start" -v e="$end" 'BEGIN {printf "%.0f", (e-s)*1000000000}')
+printf 'clang elapsed_ns=%s pid=%s\n' "$elapsed" "$$" >> /profile/docker-clang.log
+exit "$rc"

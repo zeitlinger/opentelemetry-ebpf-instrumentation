@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+start=$(date +%s%N)
+"$REAL_BPF2GO" "$@"
+rc=$?
+end=$(date +%s%N)
+printf 'bpf2go elapsed_ns=%s pid=%s args=%q\n' "$((end-start))" "$$" "$*" >> "$PROFILE_DIR/mise-bpf2go.log"
+exit "$rc"

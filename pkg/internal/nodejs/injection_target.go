@@ -6,9 +6,10 @@ package nodejs // import "go.opentelemetry.io/obi/pkg/internal/nodejs"
 import (
 	"fmt"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -22,7 +23,7 @@ var openProcessHandle = procs.OpenProcessHandle
 type InjectionTarget struct {
 	Pid          app.PID
 	Process      *procs.ProcessHandle
-	DynamicSpans []services.DynamicSpan
+	DynamicSpans []dynamicspan.Span
 }
 
 // InjectionTargetFrom pins the process inspected by discovery. The caller owns
@@ -38,7 +39,7 @@ func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
 	return InjectionTarget{
 		Pid:          pid,
 		Process:      process,
-		DynamicSpans: ie.FileInfo.ServiceAttrs().DynamicSpans,
+		DynamicSpans: dynamicspanstate.ForFile(ie.FileInfo),
 	}, nil
 }
 

@@ -137,8 +137,6 @@ type Attrs struct {
 
 	ExportModes services.ExportModes
 
-	DynamicSpans []services.DynamicSpan
-
 	Sampler trace.Sampler
 	// SamplerConfig is what Sampler was built from: eBPF applies it to the traces
 	// the process starts. Both are nil when the global sampler applies, unless

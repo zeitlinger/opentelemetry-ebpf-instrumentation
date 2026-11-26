@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -26,6 +27,7 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -40,7 +42,6 @@ type dummyCriterion struct {
 	sampler   *services.SamplerConfig
 	routes    *services.CustomRoutesConfig
 	features  export.Features
-	spans     []services.DynamicSpan
 }
 
 func (d dummyCriterion) GetName() string { return d.name }
@@ -72,8 +73,6 @@ func (d dummyCriterion) GetExportModes() services.ExportModes { return d.export 
 func (d dummyCriterion) GetSamplerConfig() *services.SamplerConfig { return d.sampler }
 
 func (d dummyCriterion) GetRoutesConfig() *services.CustomRoutesConfig { return d.routes }
-
-func (d dummyCriterion) GetDynamicSpans() []services.DynamicSpan { return d.spans }
 
 func (d dummyCriterion) MetricsConfig() perapp.SvcMetricsConfig {
 	return perapp.SvcMetricsConfig{Features: d.features}
@@ -171,24 +170,22 @@ func TestMakeServiceAttrs(t *testing.T) {
 	assert.NotNil(t, attrs2.CustomOutRouteMatcher)
 }
 
-func TestMakeServiceAttrsCarriesSpansFromMatchedSelectors(t *testing.T) {
+func TestMatchedSelectorsCarryDynamicSpansToProcessState(t *testing.T) {
 	t.Parallel()
 
-	spans := []services.DynamicSpan{{Name: "checkout.place_order", FunctionReference: "**/checkout.js:exports.placeOrder"}}
-	process := &ProcessMatch{
-		Process: &services.ProcessInfo{Pid: 1234},
-		Criteria: []services.Selector{
-			dummyCriterion{spans: spans},
-		},
-	}
-	ty := typer{cfg: &obi.Config{Routes: &transform.RoutesConfig{}}}
+	spans := []dynamicspan.Span{{Name: "checkout.place_order", FunctionReference: "**/checkout.js:exports.placeOrder"}}
+	selected := &services.GlobAttributes{Path: services.NewGlob("/srv/checkout")}
+	unselected := &services.GlobAttributes{Path: services.NewGlob("/srv/other")}
+	dynamicspan.RegisterSelector(selected, spans)
 
-	attrs := ty.makeServiceAttrs(process)
-	assert.Equal(t, spans, attrs.DynamicSpans)
+	matched := selectedDynamicSpans([]services.Selector{selected})
+	require.Equal(t, spans, matched)
+	require.Empty(t, selectedDynamicSpans([]services.Selector{unselected}))
 
-	process.Criteria = nil
-	attrs = ty.makeServiceAttrs(process)
-	assert.Empty(t, attrs.DynamicSpans)
+	file := exec.New(exec.Init{Pid: 1234})
+	dynamicspanstate.Set(file, matched)
+	assert.Equal(t, spans, dynamicspanstate.ForFile(file))
+	assert.Empty(t, dynamicspanstate.ForFile(exec.New(exec.Init{Pid: 1234})))
 }
 
 func TestMakeServiceAttrsUsesGlobalServiceIdentityWithDiscoveryRules(t *testing.T) {

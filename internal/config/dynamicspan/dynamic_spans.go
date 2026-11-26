@@ -20,7 +20,7 @@ func ValidateV2(ruleIndex int, spans []V2SpanTarget) error {
 	if len(spans) == 0 {
 		return nil
 	}
-	path := fmt.Sprintf("capture.rules[%d].refine.spans", ruleIndex)
+	path := fmt.Sprintf("capture.rules[%d].refine.spans/development", ruleIndex)
 	for spanIndex, span := range spans {
 		spanPath := fmt.Sprintf("%s[%d]", path, spanIndex)
 		if span.Function == "" || span.FunctionNoRet != "" || span.USDTSpan != "" || span.USDTNoRet != "" {

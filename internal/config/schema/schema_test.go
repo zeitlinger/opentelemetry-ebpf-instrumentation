@@ -151,7 +151,7 @@ extensions:
             process:
               language_glob: [java]
           refine:
-            spans:
+            spans/development:
               - name: checkout.place_order
                 on:
                   function: "com.example.Checkout#placeOrder"
@@ -171,6 +171,23 @@ extensions:
 	require.NoError(t, err)
 	require.Contains(t, string(encoded), "function:")
 	require.NotContains(t, string(encoded), "automatic_attributes:")
+}
+
+func TestCaptureRuleSpansRequireDevelopmentSuffix(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := ParseStandaloneYAML([]byte(`file_format: "1.0"
+extensions:
+  obi:
+    version: "2.0"
+    capture:
+      rules:
+        - action: include
+          match: {process: {language_glob: [java]}}
+          refine:
+            spans: []
+`))
+	require.ErrorContains(t, err, "field spans not found")
 }
 
 func TestCaptureRuleSpanValidation(t *testing.T) {
@@ -198,7 +215,7 @@ extensions:
         - action: include
           match: {process: {language_glob: [java]}}
           refine:
-            spans: [%s]
+            spans/development: [%s]
 `, tc.span)
 			_, _, err := ParseStandaloneYAML([]byte(input))
 			require.ErrorContains(t, err, tc.want)
@@ -226,7 +243,7 @@ extensions:
         - action: include
           match: {process: {language_glob: [java]}}
           refine:
-            spans:
+            spans/development:
               - name: example
                 on: {%s}
                 attributes:
@@ -261,7 +278,7 @@ extensions:
         - action: include
           match: {process: {language_glob: [java]}}
           refine:
-            spans: [%s]
+            spans/development: [%s]
 `, tc.span)
 			_, _, err := ParseStandaloneYAML([]byte(input))
 			require.ErrorContains(t, err, tc.issue)
@@ -281,7 +298,7 @@ extensions:
         - action: include
           match: {process: {language_glob: [java]}}
           refine:
-            spans:
+            spans/development:
               - name: test
                 on:
                   <<: &target {function: f}
@@ -298,7 +315,7 @@ extensions:
         - action: include
           match: {process: {language_glob: [java]}}
           refine:
-            spans:
+            spans/development:
               - name: test
                 on:
                   <<: &target {function: old}
@@ -319,11 +336,11 @@ extensions:
         - action: exclude
           match: {process: {language_glob: [java]}}
           refine:
-            spans:
+            spans/development:
               - name: test
                 on: {function: f}
 `))
-	require.ErrorContains(t, err, "refine.spans cannot be used with exclude rules")
+	require.ErrorContains(t, err, "refine.spans/development cannot be used with exclude rules")
 }
 
 func TestParseFlowLimitAliasPresence(t *testing.T) {

@@ -22,7 +22,7 @@ capture:
           language_glob: [nodejs]
           cmd_args_glob: ["node app.js"]
       refine:
-        spans:
+        spans/development:
           - name: checkout.place_order
             on:
               function: "**:exports.orders.placeOrder"

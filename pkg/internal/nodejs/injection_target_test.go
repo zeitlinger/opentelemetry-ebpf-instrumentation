@@ -10,11 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	execdiscover "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -49,13 +50,13 @@ func TestInjectionTargetFromUsesInspectionIdentity(t *testing.T) {
 }
 
 func TestInjectionTargetFromCarriesOnlyMatchedDynamicSpans(t *testing.T) {
-	spans := []services.DynamicSpan{{Name: "checkout.place_order", FunctionReference: "**/checkout.js:exports.placeOrder"}}
+	spans := []dynamicspan.Span{{Name: "checkout.place_order", FunctionReference: "**/checkout.js:exports.placeOrder"}}
 	inst := nodeInstrumentable(1000, 4242)
 	inst.FileInfo = execdiscover.New(execdiscover.Init{
 		Pid:       1000,
 		StartTime: 4242,
-		Service:   svc.Attrs{DynamicSpans: spans},
 	})
+	dynamicspanstate.Set(inst.FileInfo, spans)
 	stubOpenProcessHandle(t, func(app.PID, uint64) (*procs.ProcessHandle, error) { return nil, nil })
 
 	target, err := InjectionTargetFrom(inst)

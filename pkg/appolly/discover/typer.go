@@ -15,6 +15,7 @@ import (
 
 	"go.opentelemetry.io/otel/sdk/trace"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -22,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -128,7 +130,6 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 	exportModes := services.ExportModeUnset
 	samplerConfig := samplingConfig(*processMatch)
 	var routesConfig *services.CustomRoutesConfig
-	var dynamicSpans []services.DynamicSpan
 	svcFeatures := t.cfg.Metrics.Features
 	exceptions := t.cfg.Exceptions
 	jobTraces := true
@@ -157,10 +158,6 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		if m := s.GetRoutesConfig(); m != nil {
 			routesConfig = m
 		}
-		if spanSelector, ok := s.(interface{ GetDynamicSpans() []services.DynamicSpan }); ok {
-			dynamicSpans = append(dynamicSpans, spanSelector.GetDynamicSpans()...)
-		}
-
 		exceptions = selectorExceptions(s).Resolve(t.cfg.Exceptions)
 		jobTraces = selectorJobTraces(s)
 
@@ -182,7 +179,6 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 		ProcPID:            processMatch.Process.Pid,
 		DynamicSelectorPID: processMatch.DynamicSelectorPID,
 		ExportModes:        exportModes,
-		DynamicSpans:       dynamicSpans,
 		Sampler:            samplerFromConfig(samplerConfig),
 		SamplerConfig:      samplerConfig,
 		Features:           svcFeatures,
@@ -268,6 +264,7 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 			if elfFile, err := findExecElf(ev.Obj.Process, &svcID); err != nil {
 				t.log.Debug("error finding process ELF. Ignoring", "error", err)
 			} else {
+				dynamicspanstate.Set(elfFile, selectedDynamicSpans(ev.Obj.Criteria))
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
 				elfs = append(elfs, elfFile)
 			}
@@ -292,6 +289,14 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		out = append(out, Event[ebpf.Instrumentable]{Type: EventCreated, Obj: inst})
 	}
 	return out
+}
+
+func selectedDynamicSpans(criteria []services.Selector) []dynamicspan.Span {
+	var spans []dynamicspan.Span
+	for _, selector := range criteria {
+		spans = append(spans, dynamicspan.ForSelector(selector)...)
+	}
+	return spans
 }
 
 // asInstrumentable classifies the discovered process.

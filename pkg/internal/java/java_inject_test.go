@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -551,7 +551,7 @@ func TestJavaInjector_AttachOpts(t *testing.T) {
 		debug          bool
 		debugBB        bool
 		runtimeMetrics bool
-		dynamicSpans   []services.DynamicSpan
+		dynamicSpans   []dynamicspan.Span
 		expected       string
 	}{
 		{
@@ -586,7 +586,7 @@ func TestJavaInjector_AttachOpts(t *testing.T) {
 		},
 		{
 			name:         "dynamic spans only",
-			dynamicSpans: []services.DynamicSpan{{Name: "checkout.place_order", FunctionReference: "com.example.Checkout#placeOrder()"}},
+			dynamicSpans: []dynamicspan.Span{{Name: "checkout.place_order", FunctionReference: "com.example.Checkout#placeOrder()"}},
 			expected: "=dynamicSpans=" + base64.RawURLEncoding.EncodeToString([]byte("checkout.place_order")) + "." +
 				base64.RawURLEncoding.EncodeToString([]byte("com.example.Checkout#placeOrder()")),
 		},
@@ -627,7 +627,7 @@ func TestJavaInjector_AttachOpts(t *testing.T) {
 
 func TestJavaInjector_AttachOptsKeepsDynamicSpansProcessScoped(t *testing.T) {
 	injector := &JavaInjector{cfg: &obi.Config{}, log: slog.Default()}
-	selected := injector.attachOpts(false, []services.DynamicSpan{{Name: "selected", FunctionReference: "com.example.Selected#run()"}})
+	selected := injector.attachOpts(false, []dynamicspan.Span{{Name: "selected", FunctionReference: "com.example.Selected#run()"}})
 	unselected := injector.attachOpts(false, nil)
 	require.Contains(t, selected, "dynamicSpans=")
 	require.Empty(t, unselected)

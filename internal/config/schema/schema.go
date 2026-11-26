@@ -513,10 +513,10 @@ func ValidateReceiver(cfg *Extension) error {
 func validateCaptureSpans(rules []Rule) error {
 	for i, rule := range rules {
 		if rule.Action == CaptureActionExclude && len(rule.Refine.Spans) > 0 {
-			return fmt.Errorf("capture.rules[%d].refine.spans cannot be used with exclude rules", i)
+			return fmt.Errorf("capture.rules[%d].refine.spans/development cannot be used with exclude rules", i)
 		}
 		for j, span := range rule.Refine.Spans {
-			path := fmt.Sprintf("capture.rules[%d].refine.spans[%d]", i, j)
+			path := fmt.Sprintf("capture.rules[%d].refine.spans/development[%d]", i, j)
 			if span.Name == "" {
 				return fmt.Errorf("%s.name must not be empty", path)
 			}

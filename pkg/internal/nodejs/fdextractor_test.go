@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/config"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
@@ -90,7 +90,7 @@ func TestAgentCodeCarriesOnlySelectedDynamicSpans(t *testing.T) {
 	require.Equal(t, 1, strings.Count(_spanBridgeCode, manualSpansEnabledPlaceholder),
 		"manual-span capture placeholder missing or duplicated in spanbridge.js")
 	injector := &NodeInjector{cfg: &obi.Config{TracePrinter: "text"}}
-	selected := []services.DynamicSpan{{
+	selected := []dynamicspan.Span{{
 		Name:              "checkout.place_order",
 		FunctionReference: "**/checkout.js:exports.placeOrder",
 	}}
@@ -117,7 +117,7 @@ func TestAgentCodeCarriesOnlySelectedDynamicSpans(t *testing.T) {
 
 func TestAgentCodeSkipsInvalidDynamicSpanAndKeepsValidSibling(t *testing.T) {
 	injector := NewNodeInjector(&obi.Config{TracePrinter: "text"})
-	spans := []services.DynamicSpan{
+	spans := []dynamicspan.Span{
 		{Name: "invalid", FunctionReference: " \t"},
 		{Name: "valid", FunctionReference: "**:exports.placeOrder"},
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
@@ -23,6 +24,22 @@ import (
 	"go.opentelemetry.io/obi/pkg/selection"
 	"go.opentelemetry.io/obi/pkg/transform"
 )
+
+func TestFindingCriteriaPreservesDynamicSpansAcrossMixedTargetClone(t *testing.T) {
+	spans := []dynamicspan.Span{{Name: "selected", FunctionReference: "com.example.Foo#bar"}}
+	cfg := &obi.Config{
+		AutoTargetExe: services.NewGlob("/srv/other"),
+		Discovery: services.DiscoveryConfig{
+			Instrument: services.GlobDefinitionCriteria{{Path: services.NewGlob("/srv/app")}},
+		},
+	}
+	dynamicspan.RegisterSelector(&cfg.Discovery.Instrument[0], spans)
+
+	criteria := FindingCriteria(cfg)
+	require.Len(t, criteria, 2)
+	assert.Equal(t, spans, dynamicspan.ForSelector(criteria[0]))
+	assert.Empty(t, dynamicspan.ForSelector(criteria[1]))
+}
 
 // TestMatchersMutuallyExclusive wires CriteriaMatcher + DynamicMatcher like ProcessFinder.Start.
 // Exactly one path subscribes to the input: dynamic selector set → only DynamicMatcher runs;

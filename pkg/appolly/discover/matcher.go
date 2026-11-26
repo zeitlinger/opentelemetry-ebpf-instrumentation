@@ -14,6 +14,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/process"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
@@ -509,6 +510,9 @@ func FindingCriteria(cfg *obi.Config) []services.Selector {
 				Path:      cfg.Exec,
 				OpenPorts: cfg.Port,
 			})
+			for i := range cfg.Discovery.Services {
+				dynamicspan.CopySelectorRegistration(&cfg.Discovery.Services[i], &finderCriteria[i])
+			}
 		}
 		return normalizeRegexCriteria(finderCriteria)
 	}
@@ -524,6 +528,9 @@ func FindingCriteria(cfg *obi.Config) []services.Selector {
 				OpenPorts: cfg.Port,
 				Languages: cfg.AutoTargetLanguage,
 			})
+			for i := range cfg.Discovery.Instrument {
+				dynamicspan.CopySelectorRegistration(&cfg.Discovery.Instrument[i], &finderCriteria[i])
+			}
 		}
 		return NormalizeGlobCriteria(finderCriteria)
 	}

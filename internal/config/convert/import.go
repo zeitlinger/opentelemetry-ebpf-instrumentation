@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	obiconfig "go.opentelemetry.io/obi/pkg/config"
@@ -395,8 +396,10 @@ func applyV2Policy(cfg *obi.Config, policy schema.CapturePolicy, complete bool) 
 
 type runtimeDiscoveryRules struct {
 	includeGlobs                    services.GlobDefinitionCriteria
+	includeGlobSpans                [][]dynamicspan.Span
 	excludeGlobs                    services.GlobDefinitionCriteria
 	includeRegex                    services.RegexDefinitionCriteria
+	includeRegexSpans               [][]dynamicspan.Span
 	excludeRegex                    services.RegexDefinitionCriteria
 	hasRoutePolicies                bool
 	excludeOTelInstrumentedServices bool
@@ -426,12 +429,14 @@ func addDefaultIncludeSelector(rules *runtimeDiscoveryRules) {
 		rules.includeRegex = slices.Insert(rules.includeRegex, 0, services.RegexSelector{
 			Path: services.NewRegexp(".*"),
 		})
+		rules.includeRegexSpans = slices.Insert(rules.includeRegexSpans, 0, nil)
 		return
 	}
 
 	rules.includeGlobs = slices.Insert(rules.includeGlobs, 0, services.GlobAttributes{
 		Path: services.NewGlob("*"),
 	})
+	rules.includeGlobSpans = slices.Insert(rules.includeGlobSpans, 0, nil)
 }
 
 func runtimeDiscoveryRulesFromV2(rules []schema.Rule, matchOrder schema.MatchOrder) runtimeDiscoveryRules {
@@ -448,12 +453,15 @@ func runtimeDiscoveryRulesFromV2(rules []schema.Rule, matchOrder schema.MatchOrd
 
 		switch rule.Action {
 		case schema.CaptureActionInclude:
+			spans := dynamicSpansFromRule(rule)
 			if regexSelector != nil {
 				converted.includeRegex = append(converted.includeRegex, *regexSelector)
+				converted.includeRegexSpans = append(converted.includeRegexSpans, spans)
 				converted.hasRoutePolicies = converted.hasRoutePolicies ||
 					regexSelector.Routes != nil && regexSelector.Routes.PolicyOverrides != nil
 			} else {
 				converted.includeGlobs = append(converted.includeGlobs, *globSelector)
+				converted.includeGlobSpans = append(converted.includeGlobSpans, spans)
 				converted.hasRoutePolicies = converted.hasRoutePolicies ||
 					globSelector.Routes != nil && globSelector.Routes.PolicyOverrides != nil
 			}
@@ -467,7 +475,9 @@ func runtimeDiscoveryRulesFromV2(rules []schema.Rule, matchOrder schema.MatchOrd
 	}
 	if matchOrder == schema.MatchOrderFirstMatchWins {
 		slices.Reverse(converted.includeGlobs)
+		slices.Reverse(converted.includeGlobSpans)
 		slices.Reverse(converted.includeRegex)
+		slices.Reverse(converted.includeRegexSpans)
 	}
 	return converted
 }
@@ -494,9 +504,15 @@ func applyRuntimeDiscoveryRules(cfg *obi.Config, rules runtimeDiscoveryRules) {
 	// ExcludedLinuxSystemPaths only controls language detection, so it retains
 	// its runtime default instead of being represented as a capture rule.
 	cfg.Discovery.Instrument = rules.includeGlobs
+	for i, spans := range rules.includeGlobSpans {
+		dynamicspan.RegisterSelector(&cfg.Discovery.Instrument[i], spans)
+	}
 	cfg.Discovery.ExcludeInstrument = rules.excludeGlobs
 	cfg.Discovery.DefaultExcludeInstrument = nil
 	cfg.Discovery.Services = rules.includeRegex
+	for i, spans := range rules.includeRegexSpans {
+		dynamicspan.RegisterSelector(&cfg.Discovery.Services[i], spans)
+	}
 	cfg.Discovery.ExcludeServices = rules.excludeRegex
 	cfg.Discovery.DefaultExcludeServices = nil
 	cfg.Discovery.ExcludeOTelInstrumentedServices = rules.excludeOTelInstrumentedServices
@@ -894,7 +910,6 @@ func selectorFromRule(
 			return nil, nil, false
 		}
 		selector := regexSelectorFromRule(rule)
-		selector.DynamicSpans = dynamicSpansFromRule(rule)
 		selector.Exceptions = rule.Refine.Exceptions
 		selector.JobTraces = jobTracesFromRule(rule.Refine)
 		selector.ExportModes, selector.Routes = v2RuleRefinement(
@@ -906,7 +921,6 @@ func selectorFromRule(
 	}
 
 	selector := globSelectorFromRule(rule)
-	selector.DynamicSpans = dynamicSpansFromRule(rule)
 	selector.Exceptions = rule.Refine.Exceptions
 	selector.JobTraces = jobTracesFromRule(rule.Refine)
 	selector.ExportModes, selector.Routes = v2RuleRefinement(
@@ -917,13 +931,13 @@ func selectorFromRule(
 	return &selector, nil, true
 }
 
-func dynamicSpansFromRule(rule schema.Rule) []services.DynamicSpan {
+func dynamicSpansFromRule(rule schema.Rule) []dynamicspan.Span {
 	if len(rule.Refine.Spans) == 0 {
 		return nil
 	}
-	spans := make([]services.DynamicSpan, 0, len(rule.Refine.Spans))
+	spans := make([]dynamicspan.Span, 0, len(rule.Refine.Spans))
 	for _, span := range rule.Refine.Spans {
-		spans = append(spans, services.DynamicSpan{Name: span.Name, FunctionReference: span.On.Function})
+		spans = append(spans, dynamicspan.Span{Name: span.Name, FunctionReference: span.On.Function})
 	}
 	return spans
 }
@@ -931,7 +945,6 @@ func dynamicSpansFromRule(rule schema.Rule) []services.DynamicSpan {
 func jobTracesFromRule(refine schema.RuleRefinement) *services.JobTracesConfig {
 	enabled := refine.GroupJobSpans == nil || *refine.GroupJobSpans
 	return &services.JobTracesConfig{Enabled: enabled}
-
 }
 
 func ruleMatchOnlyExportsOTLP(match schema.RuleMatch) bool {

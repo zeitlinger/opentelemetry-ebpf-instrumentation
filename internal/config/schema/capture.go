@@ -91,7 +91,7 @@ type RuleRefinement struct {
 	Exceptions    *services.ExceptionsOverride `yaml:"exceptions,omitempty"`
 	Exports       *ExportModeRefinement        `yaml:"exports,omitempty"`
 	HTTP          *HTTPRefinement              `yaml:"http,omitempty"`
-	Spans         []DynamicSpanSpec            `yaml:"spans,omitempty"`
+	Spans         []DynamicSpanSpec            `yaml:"spans/development,omitempty"`
 	GroupJobSpans *bool                        `yaml:"group_job_spans,omitempty"`
 }
 

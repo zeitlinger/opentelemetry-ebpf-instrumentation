@@ -8,10 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
+	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/debug"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
@@ -20,6 +23,11 @@ import (
 // otherwise trigger the agent for runtime metrics.
 func TestEnabledFlagDisablesInjectionEntirely(t *testing.T) {
 	cfg := obi.DefaultConfig
+	cfg.Metrics.Features = 0
+	cfg.NodeJS.Enabled = true
+	require.False(t, NewNodeInjector(&cfg).Enabled())
+
+	cfg = obi.DefaultConfig
 	cfg.NodeJS.Enabled = false
 	cfg.Metrics.Features = export.FeatureApplicationRuntime
 	require.False(t, NewNodeInjector(&cfg).Enabled())
@@ -37,4 +45,20 @@ func TestAcceptsSkipsDeno(t *testing.T) {
 	require.True(t, injector.Enabled())
 	require.False(t, injector.Accepts(&ebpf.Instrumentable{Type: svc.InstrumentableDeno}))
 	require.True(t, injector.Accepts(&ebpf.Instrumentable{Type: svc.InstrumentableNodejs}))
+}
+
+func TestDynamicSpansOnlyAcceptMatchingProcesses(t *testing.T) {
+	cfg := obi.DefaultConfig
+	cfg.NodeJS.Enabled = true
+	cfg.TracePrinter = ""
+	cfg.Metrics.Features = 0
+	cfg.Discovery.Instrument = services.GlobDefinitionCriteria{{}}
+	dynamicspan.RegisterSelector(&cfg.Discovery.Instrument[0], []dynamicspan.Span{{Name: "span"}})
+	injector := NewNodeInjector(&cfg)
+	require.True(t, injector.Enabled())
+	require.False(t, injector.Accepts(nodeInstrumentable(1000, 4242)))
+
+	matched := nodeInstrumentable(1001, 4242)
+	dynamicspanstate.Set(matched.FileInfo, []dynamicspan.Span{{Name: "span"}})
+	require.True(t, injector.Accepts(matched))
 }

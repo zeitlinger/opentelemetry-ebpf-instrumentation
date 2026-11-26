@@ -17,10 +17,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	nodejsconfig "go.opentelemetry.io/obi/internal/config/nodejs"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -56,13 +57,13 @@ func (i *NodeInjector) Enabled() bool {
 }
 
 func (i *NodeInjector) hasConfiguredDynamicSpans() bool {
-	for _, selector := range i.cfg.Discovery.Instrument {
-		if len(selector.DynamicSpans) > 0 {
+	for idx := range i.cfg.Discovery.Instrument {
+		if len(dynamicspan.ForSelector(&i.cfg.Discovery.Instrument[idx])) > 0 {
 			return true
 		}
 	}
-	for _, selector := range i.cfg.Discovery.Services {
-		if len(selector.DynamicSpans) > 0 {
+	for idx := range i.cfg.Discovery.Services {
+		if len(dynamicspan.ForSelector(&i.cfg.Discovery.Services[idx])) > 0 {
 			return true
 		}
 	}
@@ -92,6 +93,10 @@ func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable) bool {
 
 	if ie.Type != svc.InstrumentableNodejs {
 		i.log.Debug("not a NodeJS executable")
+		return false
+	}
+	if !i.cfg.Traces.Enabled() && !i.cfg.TracePrinter.Enabled() && !i.cfg.AppRuntimeMetricsEnabled() && len(dynamicspanstate.ForFile(ie.FileInfo)) == 0 {
+		i.log.Debug("Node.js process has no matching dynamic spans")
 		return false
 	}
 
@@ -192,7 +197,7 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 // value reports whether the injection was carried out.
 //
 // The port was the application's before OBI connected, so it is left open.
-func (i *NodeInjector) injectViaOpenInspector(pid int, dynamicSpans []services.DynamicSpan) (bool, error) {
+func (i *NodeInjector) injectViaOpenInspector(pid int, dynamicSpans []dynamicspan.Span) (bool, error) {
 	injected := false
 
 	err := netns.WithNetNS(pid, func() error {
@@ -343,7 +348,7 @@ func (i *NodeInjector) agentCode() string {
 	return i.agentCodeForSpans(nil)
 }
 
-func (i *NodeInjector) agentCodeForSpans(dynamicSpans []services.DynamicSpan) string {
+func (i *NodeInjector) agentCodeForSpans(dynamicSpans []dynamicspan.Span) string {
 	code := _extractorCode
 	if i.cfg.AppRuntimeMetricsEnabled() {
 		code = strings.Replace(code, rtEnabledPlaceholder, rtEnabledOn, 1)
@@ -378,7 +383,7 @@ func (i *NodeInjector) agentCodeForSpans(dynamicSpans []services.DynamicSpan) st
 	return code
 }
 
-func (i *NodeInjector) dynamicSpanCode(dynamicSpans []services.DynamicSpan) string {
+func (i *NodeInjector) dynamicSpanCode(dynamicSpans []dynamicspan.Span) string {
 	type rule struct {
 		Name      string `json:"name"`
 		Reference string `json:"reference"`

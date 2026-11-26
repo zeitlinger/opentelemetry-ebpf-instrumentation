@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/tracesgen"
@@ -55,18 +56,19 @@ func TestSelectionRuleSpansSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		name, action string
-		spans        any
-		wantErr      bool
+		name, action, refineKey string
+		spans                   any
+		wantErr                 bool
 	}{
-		{name: "include with spans", action: "include", spans: []any{map[string]any{"name": "custom", "on": map[string]any{"function": "example.Func"}}}},
-		{name: "exclude with empty spans", action: "exclude", spans: []any{}},
-		{name: "exclude with spans", action: "exclude", spans: []any{map[string]any{"name": "custom", "on": map[string]any{"function": "example.Func"}}}, wantErr: true},
+		{name: "include with spans", action: "include", refineKey: "spans/development", spans: []any{map[string]any{"name": "custom", "on": map[string]any{"function": "example.Func"}}}},
+		{name: "legacy unsuffixed key", action: "include", refineKey: "spans", spans: []any{}, wantErr: true},
+		{name: "exclude with empty spans", action: "exclude", refineKey: "spans/development", spans: []any{}},
+		{name: "exclude with spans", action: "exclude", refineKey: "spans/development", spans: []any{map[string]any{"name": "custom", "on": map[string]any{"function": "example.Func"}}}, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rule := map[string]any{"action": tc.action, "match": map[string]any{"process": map[string]any{"language_glob": []any{"java"}}}}
 			if tc.spans != nil {
-				rule["refine"] = map[string]any{"spans": tc.spans}
+				rule["refine"] = map[string]any{tc.refineKey: tc.spans}
 			}
 			err := schema.Validate(map[string]any{"version": "2.0", "capture": map[string]any{"rules": []any{rule}}})
 			if (err != nil) != tc.wantErr {

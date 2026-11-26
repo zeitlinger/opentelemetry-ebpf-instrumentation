@@ -659,10 +659,12 @@ supported by the current adapter; use capture rules for workload selection.
 
 ### Dynamic spans on capture rules
 
-`capture.rules[].refine.spans` declares optional function or USDT spans for that
-rule. These declarations are schema-only; the runtime converter rejects them
-until runtime application is supported. See the
-[dynamic instrumentation reference](dynamic-instrumentation.md) for the
+`capture.rules[].refine.spans/development` is the experimental, opt-in list for
+per-rule dynamic spans; an omitted or empty list leaves them off. Currently, the
+Java and Node.js adapters support only `on.function`, without explicit or
+automatic attributes. `function_noret` and USDT targets are reserved schema
+shapes, not supported runtime targets. This is startup-only: any configuration refresh while experimental spans are
+configured in either the current or next configuration requires restarting OBI. See the [dynamic instrumentation reference](dynamic-instrumentation.md) for the
 current syntax and attribute semantics. The proposed Java method selector is
 described in the [Java method reference contract](java-method-reference.md).
 

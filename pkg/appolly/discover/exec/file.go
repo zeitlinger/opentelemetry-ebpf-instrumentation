@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -185,7 +184,6 @@ func (fi *FileInfo) ServiceAttrs() svc.Attrs {
 	out := fi.service
 	out.Metadata = maps.Clone(fi.service.Metadata)
 	out.EnvVars = maps.Clone(fi.service.EnvVars)
-	out.DynamicSpans = slices.Clone(fi.service.DynamicSpans)
 
 	// no need to clone the other fields as they are immutable
 	return out

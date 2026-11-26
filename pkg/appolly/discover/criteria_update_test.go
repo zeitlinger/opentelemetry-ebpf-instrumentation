@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -730,6 +731,17 @@ func TestCriteriaRefreshReportsStableConflictingPID(t *testing.T) {
 	require.NoError(t, matcher.refresh(t.Context(), update))
 	require.Len(t, matcher.ProcessHistory, 1)
 	require.Contains(t, matcher.ProcessHistory, app.PID(1))
+}
+
+func TestCompatibleDefinitionsRejectsRefreshWhenDynamicSpansAreConfigured(t *testing.T) {
+	spans := []dynamicspan.Span{{Name: "selected", FunctionReference: "com.example.Foo#bar"}}
+	current := &services.GlobAttributes{Path: services.NewGlob("/srv/app")}
+	next := &services.GlobAttributes{Path: services.NewGlob("/srv/app")}
+	dynamicspan.RegisterSelector(current, spans)
+	dynamicspan.RegisterSelector(next, spans)
+
+	err := compatibleDefinitions([]services.Selector{current}, []services.Selector{next})
+	require.EqualError(t, err, "configuration with dynamic spans cannot be refreshed; restart OBI to apply it")
 }
 
 func TestCriteriaUpdaterRepeatedMatcherShutdown(t *testing.T) {

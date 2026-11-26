@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/config"
@@ -46,7 +47,7 @@ extensions:
         - action: include
           match: ` + tc.match + `
           refine:
-            spans:
+            spans/development:
               - name: example
                 on: {function: "` + tc.reference + `"}
 `
@@ -55,14 +56,16 @@ extensions:
 			converted, err := V2ToRuntime(extension)
 			require.NoError(t, err)
 			var dynamicSelector *services.GlobAttributes
+			var spans []dynamicspan.Span
 			for i := range converted.Discovery.Instrument {
-				if len(converted.Discovery.Instrument[i].DynamicSpans) > 0 {
+				if configured := dynamicspan.ForSelector(&converted.Discovery.Instrument[i]); len(configured) > 0 {
 					dynamicSelector = &converted.Discovery.Instrument[i]
+					spans = configured
 					break
 				}
 			}
 			require.NotNil(t, dynamicSelector)
-			require.Equal(t, []services.DynamicSpan{{Name: "example", FunctionReference: tc.reference}}, dynamicSelector.DynamicSpans)
+			require.Equal(t, []dynamicspan.Span{{Name: "example", FunctionReference: tc.reference}}, spans)
 			require.Equal(t, tc.wantLangs, globString(dynamicSelector.Languages))
 		})
 	}
@@ -84,7 +87,7 @@ extensions:
         - action: include
           match: ` + match + `
           refine:
-            spans:
+            spans/development:
               - name: checkout.place_order
                 on: {function: "**/checkout.js:exports.placeOrder"}
 `
@@ -93,18 +96,64 @@ extensions:
 		converted, err := V2ToRuntime(extension)
 		require.NoError(t, err)
 		var dynamicSelector *services.GlobAttributes
+		var spans []dynamicspan.Span
 		for i := range converted.Discovery.Instrument {
-			if len(converted.Discovery.Instrument[i].DynamicSpans) > 0 {
+			if configured := dynamicspan.ForSelector(&converted.Discovery.Instrument[i]); len(configured) > 0 {
 				dynamicSelector = &converted.Discovery.Instrument[i]
+				spans = configured
 				break
 			}
 		}
 		require.NotNil(t, dynamicSelector)
-		require.Equal(t, []services.DynamicSpan{{
+		require.Equal(t, []dynamicspan.Span{{
 			Name:              "checkout.place_order",
 			FunctionReference: "**/checkout.js:exports.placeOrder",
-		}}, dynamicSelector.DynamicSpans)
+		}}, spans)
 	}
+}
+
+func TestV2DynamicSpanSidecarsFollowRuleOrderingAndDefaultInsert(t *testing.T) {
+	config := `file_format: "1.0"
+extensions:
+  obi:
+    version: "2.0"
+    capture:
+      policy:
+        default_action: include
+        match_order: first_match_wins
+      rules:
+        - action: include
+          match: {process: {exe_path_glob: ["/first/*"]}}
+          refine:
+            spans/development:
+              - name: first
+                on: {function: "com.example.First#run"}
+        - action: include
+          match: {process: {exe_path_glob: ["/second/*"]}}
+          refine:
+            spans/development:
+              - name: second
+                on: {function: "com.example.Second#run"}
+`
+	_, extension, err := schema.ParseStandaloneYAML([]byte(config))
+	require.NoError(t, err)
+	converted, err := V2ToRuntime(extension)
+	require.NoError(t, err)
+
+	got := map[string][]dynamicspan.Span{}
+	for i := range converted.Discovery.Instrument {
+		selector := &converted.Discovery.Instrument[i]
+		switch {
+		case selector.Path.MatchString("/first/app"):
+			got["first"] = dynamicspan.ForSelector(selector)
+		case selector.Path.MatchString("/second/app"):
+			got["second"] = dynamicspan.ForSelector(selector)
+		case selector.Path.MatchString("/other/app"):
+			require.Empty(t, dynamicspan.ForSelector(selector), "default include must not inherit a rule's spans")
+		}
+	}
+	require.Equal(t, []dynamicspan.Span{{Name: "first", FunctionReference: "com.example.First#run"}}, got["first"])
+	require.Equal(t, []dynamicspan.Span{{Name: "second", FunctionReference: "com.example.Second#run"}}, got["second"])
 }
 
 func TestRuntimeConverterRejectsUnsupportedJavaDynamicSpans(t *testing.T) {
@@ -129,7 +178,7 @@ extensions:
         - action: include
           match: {process: {language_glob: [` + tc.match + `]}}
           refine:
-            spans:
+            spans/development:
               - name: example
                 ` + tc.span + `
 `
@@ -149,7 +198,7 @@ func TestV2ToRuntimeAllowsEmptySpansRefinementOnExclude(t *testing.T) {
 		refine string
 	}{
 		{name: "omitted"},
-		{name: "empty", refine: "refine: {spans: []}"},
+		{name: "empty", refine: "refine: {spans/development: []}"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

@@ -6,10 +6,11 @@ package javaagent // import "go.opentelemetry.io/obi/pkg/internal/java"
 import (
 	"fmt"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -24,7 +25,7 @@ type InjectionTarget struct {
 	Type                  svc.InstrumentableType
 	Pid                   app.PID
 	RuntimeMetricsEnabled bool
-	DynamicSpans          []services.DynamicSpan
+	DynamicSpans          []dynamicspan.Span
 	// TempDirEnv is the process' TMPDIR, empty when it does not set one.
 	TempDirEnv string
 	// StartTime pins the target to one incarnation of Pid. Injection is queued
@@ -51,7 +52,7 @@ func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
 		Type:                  ie.Type,
 		Pid:                   pid,
 		RuntimeMetricsEnabled: ie.FileInfo.ServiceAttrs().Features.AppRuntime(),
-		DynamicSpans:          append([]services.DynamicSpan(nil), ie.FileInfo.ServiceAttrs().DynamicSpans...),
+		DynamicSpans:          dynamicspanstate.ForFile(ie.FileInfo),
 		TempDirEnv:            ie.FileInfo.ServiceAttrs().EnvVars["TMPDIR"],
 		StartTime:             startTime,
 		Process:               process,

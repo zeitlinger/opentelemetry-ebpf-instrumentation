@@ -14,6 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export"
@@ -409,6 +410,9 @@ func refreshableCriteria(cfg *obi.Config) []services.Selector {
 
 // Definitions may be added, removed or reordered, but existing service settings cannot be replaced.
 func compatibleDefinitions(current, next []services.Selector) error {
+	if selectorsHaveDynamicSpans(current) || selectorsHaveDynamicSpans(next) {
+		return errors.New("configuration with dynamic spans cannot be refreshed; restart OBI to apply it")
+	}
 	if !definitionsKeepSettings(current, next) {
 		return errors.New("service settings changed in discovery definitions; restart OBI to apply this configuration")
 	}
@@ -447,6 +451,15 @@ func compatibleDefinitions(current, next []services.Selector) error {
 	}
 
 	return nil
+}
+
+func selectorsHaveDynamicSpans(selectors []services.Selector) bool {
+	for _, selector := range selectors {
+		if len(dynamicspan.ForSelector(selector)) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func predicateKey(selector services.Selector) (string, error) {

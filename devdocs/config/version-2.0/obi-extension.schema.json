@@ -498,10 +498,10 @@
             }
           }
         },
-        "spans": {
+        "spans/development": {
           "type": "array",
-          "description": "Dynamic span declarations scoped to this capture rule. Schema-only; the runtime converter currently rejects non-empty declarations.",
-          "items": {"$ref": "#/$defs/DynamicSpanSpec"}
+          "description": "Experimental dynamic span declarations scoped to this capture rule. Opt in by supplying a non-empty list on an include rule; omitted or empty lists disable dynamic spans. Startup-only: any configuration refresh while experimental spans are configured in either the current or next configuration requires restarting OBI.",
+          "items": {"$ref": "#/$defs/ExperimentalDynamicSpanSpec"}
         },
         "http": {
           "type": "object",
@@ -669,7 +669,7 @@
           },
           "refine": {
             "$ref": "#/$defs/SelectionRuleRefine",
-            "description": "Optional workload-scoped configuration overrides for matched workloads.\nNon-empty refinements are supported only on include rules; spans on exclude rules are rejected.\nIf omitted, global defaults apply without modification.\n"
+            "description": "Optional workload-scoped configuration overrides for matched workloads.\nNon-empty refinements are supported only on include rules; non-empty development spans on exclude rules are rejected.\nIf omitted, global defaults apply without modification.\n"
           }
         },
         "required": [
@@ -688,7 +688,7 @@
               "properties": {
                 "refine": {
                   "properties": {
-                    "spans": {"maxItems": 0}
+                    "spans/development": {"maxItems": 0}
                   }
                 }
               }
@@ -2777,7 +2777,7 @@
         }
       }
     },
-    "DynamicSpanSpec": {
+    "ExperimentalDynamicSpanSpec": {
       "type": "object",
       "description": "A named span declared from one probe target.",
       "additionalProperties": false,
@@ -2792,7 +2792,7 @@
           "description": "Name emitted for the span."
         },
         "on": {
-          "$ref": "#/$defs/DynamicSpanTarget"
+          "$ref": "#/$defs/ExperimentalDynamicSpanTarget"
         },
         "automatic_attributes": {
           "type": "boolean",
@@ -2803,12 +2803,12 @@
           "type": "array",
           "description": "Explicitly mapped span attributes.",
           "items": {
-            "$ref": "#/$defs/DynamicSpanAttribute"
+            "$ref": "#/$defs/ExperimentalDynamicSpanAttribute"
           }
         }
       }
     },
-    "DynamicSpanTarget": {
+    "ExperimentalDynamicSpanTarget": {
       "description": "Exactly one function or USDT target form is required.",
       "oneOf": [
         {
@@ -2852,7 +2852,7 @@
               "description": "`provider:base` for paired `<base>_start` and `<base>_end` probes."
             },
             "match": {
-              "$ref": "#/$defs/DynamicSpanMatch"
+              "$ref": "#/$defs/ExperimentalDynamicSpanMatch"
             }
           }
         },
@@ -2869,13 +2869,13 @@
               "description": "`provider:name` for a single zero-duration marker probe."
             },
             "match": {
-              "$ref": "#/$defs/DynamicSpanMatch"
+              "$ref": "#/$defs/ExperimentalDynamicSpanMatch"
             }
           }
         }
       ]
     },
-    "DynamicSpanMatch": {
+    "ExperimentalDynamicSpanMatch": {
       "type": "object",
       "description": "Filter USDT events by a string-valued probe argument.",
       "additionalProperties": false,
@@ -2889,11 +2889,11 @@
           "minLength": 1
         },
         "argument": {
-          "$ref": "#/$defs/DynamicArgument"
+          "$ref": "#/$defs/ExperimentalDynamicArgument"
         }
       }
     },
-    "DynamicSpanAttribute": {
+    "ExperimentalDynamicSpanAttribute": {
       "type": "object",
       "description": "Map one decoded source argument to a span attribute. The decoded value determines its OpenTelemetry attribute type.",
       "additionalProperties": false,
@@ -2907,11 +2907,11 @@
           "minLength": 1
         },
         "argument": {
-          "$ref": "#/$defs/DynamicSpanAttributeArgument"
+          "$ref": "#/$defs/ExperimentalDynamicSpanAttributeArgument"
         }
       }
     },
-    "DynamicSpanAttributeArgument": {
+    "ExperimentalDynamicSpanAttributeArgument": {
       "type": "object",
       "description": "Argument index and optional source decoding type. Omission is valid only when runtime/probe metadata supplies decoding.",
       "additionalProperties": false,
@@ -2931,7 +2931,7 @@
         }
       }
     },
-    "DynamicArgument": {
+    "ExperimentalDynamicArgument": {
       "type": "object",
       "description": "Select a USDT probe argument by zero-based index (0-11). Named argument selection is deferred until runtime support is demonstrated.",
       "additionalProperties": false,

@@ -17,7 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"go.opentelemetry.io/obi/pkg/appolly/services"
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 )
 
 type inspectorTarget struct {
@@ -304,7 +304,7 @@ func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, payload []byte, clos
 	return nil
 }
 
-func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool, dynamicSpans []services.DynamicSpan) error {
+func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool, dynamicSpans []dynamicspan.Span) error {
 	wsURL, err := i.requestDebuggerURL(conn)
 	if err != nil {
 		conn.Close()

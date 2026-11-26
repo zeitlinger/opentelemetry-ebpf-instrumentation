@@ -23,9 +23,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	ebpfcommon "go.opentelemetry.io/obi/pkg/ebpf/common"
 	"go.opentelemetry.io/obi/pkg/internal/jvmtools/jvm"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -459,7 +459,7 @@ func returnCodeLine(line string) (bool, error) {
 
 var supportsHeaderPropagation = ebpfcommon.SupportsJavaHTTP1Propagation
 
-func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool, dynamicSpans []services.DynamicSpan) string {
+func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool, dynamicSpans []dynamicspan.Span) string {
 	var opts []string
 	if i.cfg.Java.Debug {
 		opts = append(opts, "debug=true")

@@ -131,8 +131,6 @@ type GlobAttributes struct {
 
 	// Metrics configuration that is custom for this service match
 	Metrics perapp.SvcMetricsConfig `yaml:"metrics" env:"-"`
-
-	DynamicSpans []DynamicSpan `yaml:"-"`
 }
 
 // GlobAttr provides a YAML handler for glob.Glob so the type can be parsed from YAML or environment variables
@@ -251,8 +249,6 @@ func (ga *GlobAttributes) GetExportModes() ExportModes { return ga.ExportModes }
 func (ga *GlobAttributes) GetSamplerConfig() *SamplerConfig { return ga.SamplerConfig }
 
 func (ga *GlobAttributes) GetRoutesConfig() *CustomRoutesConfig { return ga.Routes }
-
-func (ga *GlobAttributes) GetDynamicSpans() []DynamicSpan { return ga.DynamicSpans }
 
 func (ga *GlobAttributes) pids() ([]app.PID, bool) {
 	if len(ga.PIDs) == 0 {

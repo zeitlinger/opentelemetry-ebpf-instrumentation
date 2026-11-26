@@ -15,12 +15,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	execdiscover "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/export"
+	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -40,21 +41,20 @@ func TestInjectionTargetFromUsesInspectionIdentity(t *testing.T) {
 		return nil, nil
 	})
 
-	target, err := InjectionTargetFrom(&ebpf.Instrumentable{
-		FileInfo: execdiscover.New(execdiscover.Init{
-			Pid:       1000,
-			StartTime: 4242,
-			Service: svc.Attrs{
-				Features: export.FeatureApplicationRuntime,
-				DynamicSpans: []services.DynamicSpan{{
-					Name: "selected.span", FunctionReference: "com.example.Selected#run()",
-				}},
-				EnvVars: map[string]string{
-					"TMPDIR": "/custom/tmp",
-				},
+	fileInfo := execdiscover.New(execdiscover.Init{
+		Pid:       1000,
+		StartTime: 4242,
+		Service: svc.Attrs{
+			Features: export.FeatureApplicationRuntime,
+			EnvVars: map[string]string{
+				"TMPDIR": "/custom/tmp",
 			},
-		}),
-		Type: svc.InstrumentableJava,
+		},
+	})
+	dynamicspanstate.Set(fileInfo, []dynamicspan.Span{{Name: "selected.span", FunctionReference: "com.example.Selected#run()"}})
+	target, err := InjectionTargetFrom(&ebpf.Instrumentable{
+		FileInfo: fileInfo,
+		Type:     svc.InstrumentableJava,
 	})
 
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestInjectionTargetFromUsesInspectionIdentity(t *testing.T) {
 	assert.Equal(t, uint64(4242), target.StartTime)
 	assert.Equal(t, "/custom/tmp", target.TempDirEnv)
 	assert.True(t, target.RuntimeMetricsEnabled)
-	assert.Equal(t, []services.DynamicSpan{{Name: "selected.span", FunctionReference: "com.example.Selected#run()"}}, target.DynamicSpans)
+	assert.Equal(t, []dynamicspan.Span{{Name: "selected.span", FunctionReference: "com.example.Selected#run()"}}, target.DynamicSpans)
 }
 
 func TestInjectionTargetFromFailsWhenStableIdentityCannotBeOpened(t *testing.T) {

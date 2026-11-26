@@ -2,11 +2,19 @@
 
 ← [Config v2 reference](config-v2.md)
 
-Dynamic span declarations are configured per capture rule under
-`capture.rules[].refine.spans`. This keeps each declaration alongside the
-workload selection it refines. A span has a name, exactly one target under
-`on`, and optional `attributes` mappings. Supported target keys are
-`function`, `function_noret`, `usdt`, and `usdt_noret`.
+Experimental dynamic span declarations are configured per capture rule under
+`capture.rules[].refine.spans/development`. A non-empty list on an include
+rule opts in; an omitted or empty list leaves dynamic spans off. This experimental
+setting keeps each declaration alongside the workload selection it refines.
+This is startup-only: any configuration refresh while experimental spans are
+configured in either the current or next configuration requires restarting OBI.
+A span has a name, exactly one target under
+`on`, and optional `attributes` mappings. The schema reserves the target keys
+`function`, `function_noret`, `usdt`, and `usdt_noret`; currently, the Java and
+Node.js runtime adapters accept only `on.function`. They do not support explicit
+attributes or automatic attribute capture. `function_noret` and both USDT forms
+are reserved schema shapes, not runtime-supported targets. No Go runtime
+implementation is in scope for this experimental feature.
 
 `function` and `function_noret` identify function targets; `usdt` and
 `usdt_noret` identify USDT targets. The key selects the target family and
@@ -17,10 +25,9 @@ by each runtime adapter. `usdt` uses `provider:base` to identify paired
 `<base>_start` and `<base>_end` probes. `usdt_noret` uses `provider:name` to
 identify one zero-duration marker probe. `on.match` is valid only with a USDT
 target and filters by equality against the selected string-valued argument.
-Each runtime implementation must document its accepted function syntax and
-unsupported target combinations before claiming support. Capture selectors
-continue to use the semantics of the corresponding Config v2 selector; they
-do not change the target-value syntax.
+The shared schema describes these reserved forms but does not imply runtime
+support. Capture selectors continue to use the semantics of the corresponding
+Config v2 selector; they do not change target-value syntax.
 
 Function selectors should be as simple as possible: start with the target
 information you know, then add qualifiers only when the selector matches more
@@ -35,7 +42,9 @@ application itself, can create a separate span for that work. This policy
 applies to dynamic function spans; it does not define the lifecycle of
 application-created spans or protocol spans.
 
-Each `attributes` entry names a span attribute and has an `argument` object.
+The schema also describes optional attribute mappings and automatic capture;
+these are not currently accepted by the Java or Node.js adapters. Each
+`attributes` entry names a span attribute and has an `argument` object.
 `argument.index` selects the zero-based source argument (0 through 11), and
 optional `argument.type` describes that same argument using an OBI-defined
 decoding hint: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, or
@@ -44,7 +53,7 @@ output OpenTelemetry attribute type. The `automatic_attributes` boolean opts
 into automatic argument/result capture; it defaults to `false`. When enabled,
 explicit mappings take precedence over automatically captured attributes with
 the same key; the automatic value is omitted. Spans may be declared only on
-include rules; parsing rejects spans under exclude rules. Nested object
+include rules; parsing rejects non-empty spans under exclude rules. Nested object
 extraction is not supported by this configuration.
 
 Malformed shared declaration structure is a configuration error. Runtime
@@ -60,8 +69,9 @@ its runtime-specific reference. Shared conversion validates declaration
 structure and common support constraints; the selected runtime parses its
 selector syntax and resolves targets at the runtime boundary.
 
-The following is an illustrative schema example; runtime acceptance depends
-on the runtime-specific reference and tests.
+The following Java runtime example uses the currently supported `on.function`
+form. It omits attributes, which are not currently supported by the Java or
+Node.js adapters.
 
 ```yaml
 capture:
@@ -72,12 +82,8 @@ capture:
         process:
           exe_path_glob: "/opt/apps/*"
       refine:
-        spans:
+        spans/development:
           - name: checkout.place_order
             on:
               function: "com.example.Checkout#placeOrder"
-            attributes:
-              - name: order.id
-                argument: {index: 0, type: string}
-            automatic_attributes: false
 ```

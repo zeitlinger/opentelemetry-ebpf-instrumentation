@@ -107,8 +107,11 @@ const (
 	EventTypeJVMGCDuration         = uint8(BpfEventTypeK_eventTypeJvmGcDuration) // JVM garbage-collection duration
 	EventTypeProcessFork           = uint8(BpfEventTypeK_eventTypeProcessFork)   // An instrumented process forked a process
 	EventTypeProcessExec           = uint8(BpfEventTypeK_eventTypeProcessExec)   // A forked process ran exec
-	EventTypeCustomSpan            = uint8(BpfEventTypeK_eventTypeCustomSpan)    // OBI custom-span transport
 )
+
+// eventTypeCustomSpan is private transport plumbing, not a public event type.
+// Keep its wire value in sync with k_event_type_custom_span in event_defs.h.
+const eventTypeCustomSpan uint8 = 35
 
 // Kernel-side classification. These alias the bpf2go-generated constants
 // derived from enum protocol_type in bpf/common/connection_info.h, so kernel
@@ -709,8 +712,8 @@ func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, reco
 	case EventTypeGoAutoSpan:
 		span, ignore, err := ReadGoAutoSpanEventIntoSpan(record)
 		return finalizeParsedSpan(parseCtx, span, ignore, err)
-	case EventTypeCustomSpan:
-		span, ignore, err := ReadCustomSpanEventIntoSpan(record)
+	case eventTypeCustomSpan:
+		span, ignore, err := readCustomSpanEventIntoSpan(record)
 		return finalizeParsedSpan(parseCtx, span, ignore, err)
 	case EventNodeSpan:
 		span, ignore, err := ReadNodeSpanEventIntoSpan(record)

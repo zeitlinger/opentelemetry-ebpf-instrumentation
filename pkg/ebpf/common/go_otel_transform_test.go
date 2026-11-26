@@ -77,9 +77,10 @@ func TestReadBPFTraceAsSpanGoAutoSpan(t *testing.T) {
 }
 
 func TestReadBPFTraceAsSpanCustomSpan(t *testing.T) {
+	assert.Equal(t, uint8(35), eventTypeCustomSpan)
 	payload := marshalAutoSpanPayload(t, validAutoSpanTraces())
 	record := goAutoSpanRecord(payload, uint32(len(payload)))
-	record.RawSample[0] = EventTypeCustomSpan
+	record.RawSample[0] = eventTypeCustomSpan
 
 	span, ignore, err := ReadBPFTraceAsSpan(nil, nil, record, nil)
 	require.NoError(t, err)
@@ -109,7 +110,7 @@ func TestReadCustomSpanEventRejectsMalformedRecords(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			span, ignore, err := ReadCustomSpanEventIntoSpan(tt.record)
+			span, ignore, err := readCustomSpanEventIntoSpan(tt.record)
 			require.Error(t, err)
 			assert.True(t, ignore)
 			assert.Equal(t, request.Span{}, span)
@@ -119,7 +120,7 @@ func TestReadCustomSpanEventRejectsMalformedRecords(t *testing.T) {
 
 func customSpanRecord(payload []byte, size uint32) *ringbuf.Record {
 	record := goAutoSpanRecord(payload, size)
-	record.RawSample[0] = EventTypeCustomSpan
+	record.RawSample[0] = eventTypeCustomSpan
 	return record
 }
 

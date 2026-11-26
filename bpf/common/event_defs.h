@@ -41,5 +41,8 @@ enum event_type : u8 {
     k_event_type_jvm_gc_duration = 32,
     k_event_type_process_fork = 33,
     k_event_type_process_exec = 34,
-    k_event_type_custom_span = 35,
 };
+
+// Custom spans use an internal transport event ID. Keep this outside
+// event_type so bpf2go does not expose it as part of the generated API.
+#define k_event_type_custom_span 35

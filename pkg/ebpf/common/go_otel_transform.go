@@ -70,8 +70,8 @@ func ReadGoAutoSpanEventIntoSpan(record *ringbuf.Record) (request.Span, bool, er
 	return readJSONSpanEvent(record, EventTypeGoAutoSpan, "Go Auto SDK")
 }
 
-func ReadCustomSpanEventIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
-	return readJSONSpanEvent(record, EventTypeCustomSpan, "custom span")
+func readCustomSpanEventIntoSpan(record *ringbuf.Record) (request.Span, bool, error) {
+	return readJSONSpanEvent(record, eventTypeCustomSpan, "custom span")
 }
 
 func readJSONSpanEvent(record *ringbuf.Record, expectedType uint8, name string) (request.Span, bool, error) {

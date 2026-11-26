@@ -8,11 +8,11 @@ through language-specific library instrumentation documented later in this file.
 | HTTP          |    All    |     1.0/1.1 | All                                                                                      |  Yes   |                Yes | Without a runtime-specific injector, generic TLS inject uses TCP option kind 25 only between OBI instances. L7 proxies may drop it. Header inject works for plaintext. Java 11+ `HttpClient.send()` and `sendAsync()` support HTTPS HTTP/1.1 header injection through the OBI Java agent on compatible JDKs. See [Java HttpClient propagation](java-httpclient-propagation.md).
 | HTTP          |    All    |         2.0 | All                                                                                      |  Yes   |                Yes | Network-level HPACK inject/extract on plaintext HTTP/2. Generic TLS cannot inject (`sk_msg` sees ciphertext); extract still works if a peer injected. Huffman-encoded `traceparent` extract requires kernel 5.17+. Go library instrumentation covers TLS inject via uprobes. On the generic path, about six streams that share one read or write are captured; extra streams are dropped instead of being reported with wrong values. See [grpc-context-propagation.md](grpc-context-propagation.md).
 | gRPC          |    All    |        1.0+ | All                                                                                      |  Yes   |                Yes | Same HPACK path as HTTP/2. Can't get method for long living connections before OBI started, will mark method with `*`. Generic TLS cannot inject. Huffman extract requires kernel 5.17+. Message body capture is not supported (needs a `.proto` OBI does not have).
-| MySQL         |    All    |         All | All                                                                                      |  Yes   |                 No |             In the case of prepared statements, if the statement was prepared before OBI started then the query might be missed
+| MySQL         |    All    |         All | All                                                                                      |  Yes   |                 No |             In the case of prepared statements, if the statement was prepared before OBI started then the query might be missed. Connections opened before OBI started have no `db.namespace` until they next change database, and Go `database/sql` spans have none
 | PostgreSQL    |    All    |         All | All                                                                                      |  Yes   |                 No |             In the case of prepared statements, if the statement was prepared before OBI started then the query might be missed
 | MSSQL         |    All    |         All | All                                                                                      |  Yes   |                 No |             In the case of prepared statements, if the statement was prepared before OBI started then the query might be missed
-| Redis         |    All    |         All | All                                                                                      |  Yes   |                 No |             For already started connections, can't infer the number of the database, and won't add the `db.namespace` attribute
-| MongoDB       |    All    |        5.0+ | insert, update, find, delete, findAndModify, aggregate, count, distinct, mapReduce       |  Yes   |                 No |                                                                                              no support for compressed payloads
+| Redis         |    All    |         All | All                                                                                      |  Yes   |                 No |             For already started connections, can't infer the number of the database, and won't add the `db.namespace` attribute. A worker gets one trace per job it takes off a queue, rooted at the fetch; see [Queue Job Traces](queue-job-traces.md)
+| MongoDB       |    All    |        5.0+ | insert, update, find, delete, findAndModify, aggregate, count, distinct, mapReduce       |  Yes   |                 No | no support for compressed payloads; failures of authentication and user-management commands (saslStart, saslContinue, authenticate, getnonce, createUser, updateUser, copydb*) keep only the error code and code name
 | Couchbase     |    All    |         All | All                                                                                      |  Yes   |                 No | Bucket unknown if SELECT_BUCKET occurred before OBI started; Collection unknown if GET_COLLECTION_ID occurred before OBI started
 | Memcached     |    All    |         All | ASCII text subset (excludes quit and meta commands)                                      |  Yes   |                 No |                     Only the first key is recorded for multi-key retrieval commands; payload bytes are not captured
 | Aerospike     |    All    |         All | GET, EXISTS, PUT, TOUCH, OPERATE, DELETE, SCAN, QUERY, BATCH, UDF                         |   No   |                 No |     Native client protocol (port 3000); compressed (type-4) payloads not parsed; only operation metadata captured, not record/bin values; `db.query.text` requires the client's `sendKey` write policy (otherwise only the key digest is on the wire)
@@ -47,7 +47,7 @@ chunk.
 | Anthropic | `input_tokens` plus reported cache read and cache creation tokens | `output_tokens` | Supports buffered responses and usage fields in SSE message events. |
 | Google AI Studio (Gemini) | `promptTokenCount` plus `toolUsePromptTokenCount` | `candidatesTokenCount` plus `thoughtsTokenCount` | Read from `usageMetadata` in buffered responses or stream chunks. |
 | AWS Bedrock | Response header, body usage, or model-specific input count, plus cache read and write counts | Response header, body usage, or model-specific output count | Response headers take precedence when present; buffered Converse and model-family response bodies provide fallbacks. |
-| Ollama native API | `prompt_eval_count` | `eval_count` | For NDJSON streams, counts are normally present only on the final `done` object. `/api/embed` returns no `eval_count` and sends `prompt_eval_count` after the vectors, so the HTTP buffer must fit the whole response. `/api/embeddings` returns no counts. |
+| Ollama native API | `prompt_eval_count` | `eval_count` | For NDJSON streams, counts are normally present only on the final `done` object. `prompt_eval_cached_count` (Ollama v0.33.3 and later) is exported as `gen_ai.usage.cache_read.input_tokens`. `/api/embed` returns no `eval_count` and sends `prompt_eval_count` after the vectors, so the HTTP buffer must fit the whole response. `/api/embeddings` returns no counts. |
 | Embeddings | `prompt_tokens`, `total_tokens`, or Cohere `meta.billed_units.input_tokens` | Not reported | Only input token usage is exported. |
 | Rerank | `usage.total_tokens`, `usage.prompt_tokens`, or `meta.tokens.input_tokens` | Not reported | Only input token usage is exported. |
 | Vector retrieval | `usage.prompt_tokens` or `usage.total_tokens` | Not reported | Most vector stores do not return token usage; it is exported when present. |
@@ -88,6 +88,14 @@ standalone and Collector receiver deployments. See the
 [attribute selection configuration](config/version-2.0/config-v2.md#captureattributesselect-section)
 for examples and compatibility with existing standalone settings.
 
+## HTTP query-parameter redaction
+
+Config v2 supports a complete selection of query-parameter names whose values
+are redacted in HTTP span URL attributes, in both standalone and Collector
+receiver deployments. Omitted settings preserve the built-in protection.
+See [HTTP query-parameter redaction](config/version-2.0/config-v2.md#http-query-parameter-redaction)
+for replacement semantics and migration from Config v1.
+
 ## Go Instrumentation
 
 Specifically for Go applications, OBI chooses to instrument libraries directly using Uprobes, instead of instrumenting
@@ -103,6 +111,7 @@ To turn this off and fallback to the normal network based instrumentation for Go
 | golang.org/x/net/http2         |    HTTP    |             >= 0.12.0 | All     |  Yes   |                Yes |         N/A
 | github.com/gorilla/mux         |    HTTP    |             >= v1.5.0 | All     |  Yes   |                Yes |         N/A
 | github.com/gin-gonic/gin       |    HTTP    |   >= v1.6.0,!= v1.7.5 | All     |  Yes   |                Yes |         N/A
+| github.com/emicklei/go-restful/v3 |    HTTP    |             >= v3.0.0 | All     |  Yes   |                Yes |         N/A
 | google.golang.org/grpc         |    gRPC    |               >= 1.40 | All     |  Yes   |                Yes |         N/A
 | net/rpc/jsonrpc                |  JsonRPC   |               >= 1.17 | All     |  Yes   |                 No |         N/A
 | database/sql                   |    SQL     |               >= 1.17 | All     |  Yes   |                 No |         N/A
@@ -212,3 +221,4 @@ OBI has support for several asynchronous frameworks that allow it to propagate c
 | Java Thread pool    |   Java    |           JDK 8+ | Parent lookup walks up to 3 thread-nesting levels; `-Xrs` or `-XX:+DisableAttachMechanism` prevents agent attachment | Stable
 | Java Virtual Threads |  Java    |          JDK 21+ | Log enrichment is skipped on virtual threads; `-Xrs` or `-XX:+DisableAttachMechanism` prevents agent attachment | Stable
 | Python asyncio      |  Python   | GIL-enabled, 64-bit CPython 3.9 through 3.14 | Free-threaded builds are unsupported; `asyncio.start_server()` is not correlated under uvloop; mutated contexts and cancelled `to_thread` tasks may lose correlation | Stable
+| Tokio tasks | Rust | rustc `1.97.x`–`1.100.x`, Tokio `1.51`–`1.54` | Requires retained Tokio task symbols on Linux amd64 or arm64. Tracks up to 8 nested task polls. See [Rust runtime](rust.md). | Experimental

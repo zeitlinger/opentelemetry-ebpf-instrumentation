@@ -72,6 +72,7 @@ COPY cmd/ cmd/
 COPY internal/goabi/ internal/goabi/
 COPY internal/goversion/ internal/goversion/
 COPY internal/config/ internal/config/
+COPY internal/rustexec/ internal/rustexec/
 COPY pkg/ pkg/
 COPY Makefile ./
 COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/pkg/internal/java/embedded/obi-java-agent.jar
@@ -79,7 +80,7 @@ COPY --from=javaagent-builder /build/build/obi-java-agent.jar /src/pkg/internal/
 # Build
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-	/generate.sh \
+	BPF_TARGETS=$TARGETARCH /generate.sh \
 	&& make compile RELEASE_VERSION=${RELEASE_VERSION} RELEASE_REVISION=${RELEASE_REVISION}
 
 # Create final image from minimal + built binary

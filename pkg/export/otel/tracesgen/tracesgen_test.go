@@ -193,6 +193,31 @@ func TestTraceAttributesSelector_MCPToolCallPayloadSelection(t *testing.T) {
 	assert.JSONEq(t, `[{"type":"text","text":"api_key=SECRET123"}]`, result.Str())
 }
 
+func TestHTTPClientSpanURLQueryCompatibility(t *testing.T) {
+	span := &request.Span{
+		Type: request.EventTypeHTTPClient, Method: "GET", Path: "/search",
+		FullPath: "/search?q=otel&token=secret", Statement: "https;example.com", Host: "example.com", HostPort: 443,
+	}
+	for _, excluded := range []bool{false, true} {
+		cfg := &attributes.SelectorConfig{}
+		if excluded {
+			cfg.SelectionCfg = attributes.Selection{"traces": {Exclude: []string{"url.query"}}}
+		}
+		attrs, err := UserSelectedAttributes(cfg)
+		require.NoError(t, err)
+		selected := AttrsToMap(TraceAttributesSelector(span, attrs, attributes.DefaultSensitiveQueryParams...))
+		query, exists := selected.Get("url.query")
+		require.Equal(t, !excluded, exists)
+		if exists {
+			assert.Contains(t, query.Str(), "q=otel")
+			assert.NotContains(t, query.Str(), "secret")
+		}
+		full, exists := selected.Get("url.full")
+		require.True(t, exists)
+		assert.NotContains(t, full.Str(), "secret")
+	}
+}
+
 func TestHTTPServerSpanURLQuery(t *testing.T) {
 	optInCfg := &attributes.SelectorConfig{
 		SelectionCfg: attributes.Selection{
@@ -1189,6 +1214,52 @@ func TestGenerateTracesWithAttributesDropsInvalidManualOTelJSON(t *testing.T) {
 	assert.Equal(t, 0, ss.Len())
 }
 
+func TestGenerateTracesWithAttributesSharesScopeSpansAmongOBISpans(t *testing.T) {
+	service := &svc.Attrs{UID: svc.UID{Name: "checkout"}}
+	cache := expirable2.NewLRU[svc.UID, []attribute.KeyValue](10, nil, 0)
+	obiSpan := func(id byte) TraceSpanAndAttributes {
+		return TraceSpanAndAttributes{Span: &request.Span{
+			Type:         request.EventTypeHTTP,
+			Method:       "GET",
+			Route:        "/test",
+			Status:       200,
+			RequestStart: 1,
+			Start:        1,
+			End:          2,
+			TraceID:      trace2.TraceID{1},
+			SpanID:       trace2.SpanID{id},
+		}}
+	}
+	manualSpan := TraceSpanAndAttributes{Span: &request.Span{
+		Type:           request.EventTypeManualSpan,
+		ManualOTelJSON: manualOTelPayload(t),
+	}}
+
+	traces := GenerateTracesWithAttributes(
+		cache,
+		service,
+		nil,
+		&metadata.NodeMeta{},
+		[]TraceSpanAndAttributes{obiSpan(1), manualSpan, obiSpan(2), obiSpan(3)},
+		"obi",
+	)
+
+	require.Equal(t, 1, traces.ResourceSpans().Len())
+	scopes := traces.ResourceSpans().At(0).ScopeSpans()
+	require.Equal(t, 2, scopes.Len())
+
+	obiScope := scopes.At(0)
+	assert.Equal(t, "obi", obiScope.Scope().Name())
+	assert.Equal(t, attr.TelemetryDistroVersion(), obiScope.Scope().Version())
+	assert.Equal(t, attr.OBISchemaURL, obiScope.SchemaUrl())
+	assert.Equal(t, 3, obiScope.Spans().Len())
+
+	manualScope := scopes.At(1)
+	assert.Equal(t, "manual-scope", manualScope.Scope().Name())
+	require.Equal(t, 1, manualScope.Spans().Len())
+	assert.Equal(t, "manual-json", manualScope.Spans().At(0).Name())
+}
+
 func TestAppendManualOTelJSONRejectsInvalidShape(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1591,6 +1662,16 @@ func TestTraceAttributesSelector_GenAITokenDetailAvailability(t *testing.T) {
 			},
 			keys: []string{cacheReadKey, cacheCreationKey},
 		},
+		{
+			name:    "Ollama",
+			subType: request.HTTPSubtypeOllama,
+			genAI: func(count request.TokenCount) *request.GenAI {
+				return &request.GenAI{Ollama: &request.VendorOpenAI{Usage: request.OpenAIUsage{
+					InputDetails: &request.OpenAIInputTokensDetails{CachedTokens: count},
+				}}}
+			},
+			keys: []string{cacheReadKey},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			span := &request.Span{
@@ -1959,7 +2040,7 @@ func TestHTTPClientTransportAttributesBySubtype(t *testing.T) {
 			}
 
 			_, ok := selected.Get("url.query")
-			assert.False(t, ok, "url.query must not be emitted on http client spans")
+			assert.Equal(t, tt.subType == request.HTTPSubtypeNone, ok, "plain HTTP client spans preserve url.query")
 
 			for _, key := range []string{"server.address", "server.port", "service.peer.name"} {
 				_, ok := selected.Get(key)
@@ -2619,6 +2700,46 @@ func TestExportedSpansCarryTheSamplerDecision(t *testing.T) {
 			require.Equal(t, 3, spans.Len())
 			for i := range spans.Len() {
 				assert.Equal(t, tt.flags, spans.At(i).Flags(), spans.At(i).Name())
+			}
+		})
+	}
+}
+
+func TestHTTPServerAddressFromRequestHost(t *testing.T) {
+	defaultAttrs, err := UserSelectedAttributes(&attributes.SelectorConfig{})
+	require.NoError(t, err)
+	tests := []struct {
+		statement string
+		authority string
+		want      string
+	}{
+		{"http;api.example.com:8080", "", "api.example.com"},
+		{"https;api.example.com", "", "api.example.com"},
+		{"http;127.0.0.1", "", "127.0.0.1"},
+		{"http;[2001:db8::1]:8080", "", "2001:db8::1"},
+		{"", "api.example.com:8443", "api.example.com"},
+		{"http;other.example.com", "api.example.com:8443", "api.example.com"},
+		{"", "[2001:db8::1]:8443", "2001:db8::1"},
+		{"http;", "", ""},
+		{"", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.statement, func(t *testing.T) {
+			span := &request.Span{
+				Type:             request.EventTypeHTTP,
+				Method:           "GET",
+				Path:             "/",
+				Status:           200,
+				Statement:        tt.statement,
+				RequestAuthority: tt.authority,
+				HostName:         "service-name",
+				Host:             "10.0.0.1",
+			}
+			selected := AttrsToMap(TraceAttributesSelector(span, defaultAttrs))
+			got, ok := selected.Get("server.address")
+			assert.Equal(t, tt.want != "", ok)
+			if ok {
+				assert.Equal(t, tt.want, got.Str())
 			}
 		})
 	}

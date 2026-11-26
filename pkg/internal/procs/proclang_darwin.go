@@ -10,10 +10,14 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 )
 
-func FindProcLanguage(_ app.PID) svc.InstrumentableType {
-	return svc.InstrumentableGeneric
+func FindProcLanguage(_ app.PID) (svc.InstrumentableType, error) {
+	return svc.InstrumentableGeneric, nil
 }
 
 func FindExeSymbols(_ *elf.File, _ []string, _ ...elf.SymType) (map[string]Sym, error) {
+	return nil, nil
+}
+
+func FindExeSymbolsMatching(_ *elf.File, _ func(string) bool, _ ...elf.SymType) (map[string]Sym, error) {
 	return nil, nil
 }

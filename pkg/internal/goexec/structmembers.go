@@ -14,6 +14,8 @@ import (
 
 	"github.com/grafana/go-offsets-tracker/pkg/offsets"
 	"github.com/hashicorp/go-version"
+
+	"go.opentelemetry.io/obi/internal/goabi"
 )
 
 func log() *slog.Logger {
@@ -130,11 +132,13 @@ const (
 	CcTLSPos
 	CcTLSVendoredPos
 	ScConnPos
+	ScConnInternalPos
 	CRwcPos
 	CTlsPos
 	TextReaderRPos
 	BufReaderBufPos
 	BufReaderWPos
+	BufReaderRPos
 	// grpc
 	GrpcStreamStPtrPos
 	GrpcStreamMethodPtrPos
@@ -217,6 +221,7 @@ const (
 	// route harvesting offsets
 	MuxTemplatePos
 	GinFullpathPos
+	RestfulRoutePathPos
 	// Go runtime metrics
 	RuntimeMemstatsNumGCPos
 	RuntimeGCControllerMemoryLimitPos
@@ -475,10 +480,11 @@ var structMembers = map[string]structInfo{
 			"Fields": MetaHeadersFrameFieldsPtrPos,
 		},
 	},
+	// own constant: the table also answers for the absent vendored serverConn under Go 1.27, with another offset
 	"net/http/internal/http2.serverConn": {
 		lib: "go",
 		fields: map[string]GoOffset{
-			"conn": ScConnPos,
+			"conn": ScConnInternalPos,
 		},
 	},
 	"net.TCPConn": {
@@ -538,6 +544,7 @@ var structMembers = map[string]structInfo{
 		fields: map[string]GoOffset{
 			"buf": BufReaderBufPos,
 			"w":   BufReaderWPos,
+			"r":   BufReaderRPos,
 		},
 	},
 	"google.golang.org/grpc/internal/transport.bufWriter": {
@@ -759,6 +766,12 @@ var structMembers = map[string]structInfo{
 			"fullPath": GinFullpathPos,
 		},
 	},
+	"github.com/emicklei/go-restful/v3.Route": {
+		lib: "github.com/emicklei/go-restful/v3",
+		fields: map[string]GoOffset{
+			"Path": RestfulRoutePathPos,
+		},
+	},
 	"runtime.mstats": {
 		lib: "go",
 		fields: map[string]GoOffset{
@@ -845,13 +858,14 @@ var structMembers = map[string]structInfo{
 	},
 }
 
-func structMemberOffsets(elfFile *elf.File) (FieldOffsets, error) {
+func (in *inspection) structMemberOffsets() (FieldOffsets, error) {
+	elfFile := in.elf
 	// first, try to read offsets from DWARF debug info
 	var offs FieldOffsets
 	var expected map[GoOffset]struct{}
-	dwarfData, err := elfFile.DWARF()
-	if err == nil {
-		offs, expected = structMemberOffsetsFromDwarf(dwarfData)
+	facts := in.dwarf()
+	if facts.err == nil {
+		offs, expected = facts.fieldOffsets, facts.missingFields
 		if len(expected) > 0 {
 			log().Debug("Fields not found in the DWARF file", "fields", expected)
 		} else {
@@ -1129,6 +1143,29 @@ func alignRuntimeOffset(offset, alignment uint64) uint64 {
 // structMemberOffsetsFromDwarf reads the executable dwarf information to get
 // the offsets specified in the structMembers map
 func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]struct{}) {
+	// The Go linker attaches every Go type to the runtime compile unit, so
+	// decode only that unit.
+	return structMemberOffsetsFromUnitOrAll(data, goabi.RuntimeUnit)
+}
+
+// structMemberOffsetsFromUnitOrAll reads the offsets from the compile unit
+// named unit, and from every compile unit if that unit holds no struct of
+// structMembers outside the runtime package.
+func structMemberOffsetsFromUnitOrAll(data *dwarf.Data, unit string) (FieldOffsets, map[GoOffset]struct{}) {
+	offsets, expected, found := structMemberOffsetsFromUnit(data, unit)
+	if found {
+		return offsets, expected
+	}
+	offsets, expected, _ = structMemberOffsetsFromUnit(data, "")
+	return offsets, expected
+}
+
+// structMemberOffsetsFromUnit reads the offsets from the compile unit named
+// unit, or from every compile unit if unit is empty. It also reports whether
+// it found a struct of structMembers outside the runtime package: the runtime
+// types are always in the runtime unit, so only the other types show that
+// the unit holds the library types too.
+func structMemberOffsetsFromUnit(data *dwarf.Data, unit string) (FieldOffsets, map[GoOffset]struct{}, bool) {
 	log := log().With("function", "structMemberOffsetsFromDwarf")
 	expectedReturns := map[GoOffset]struct{}{}
 	for _, str := range structMembers {
@@ -1142,15 +1179,20 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 	log.Debug("searching offests for field constants", "constants", expectedReturns)
 
 	fieldOffsets := FieldOffsets{}
+	found := false
 	reader := data.Reader()
 	for {
 		entry, err := reader.Next()
 		if err != nil {
 			log.Debug("error reading DWARF info", "data", err)
-			return fieldOffsets, expectedReturns
+			return fieldOffsets, expectedReturns, found
 		}
 		if entry == nil { // END of dwarf data
-			return fieldOffsets, expectedReturns
+			return fieldOffsets, expectedReturns, found
+		}
+		if entry.Tag == dwarf.TagCompileUnit && unit != "" && entry.Val(dwarf.AttrName) != unit {
+			reader.SkipChildren()
+			continue
 		}
 		if entry.Tag != dwarf.TagStructType {
 			continue
@@ -1166,11 +1208,14 @@ func structMemberOffsetsFromDwarf(data *dwarf.Data) (FieldOffsets, map[GoOffset]
 			reader.SkipChildren()
 			continue
 		}
+		if !strings.HasPrefix(typeName, goabi.RuntimeUnit+".") {
+			found = true
+		}
 		log.Debug("inspecting fields for struct type", "type", typeName)
 		resolveNestedStructOffsets(data, entry.Offset, typeName, expectedReturns, fieldOffsets)
 		if err := readMembers(reader, structMember.fields, expectedReturns, fieldOffsets); err != nil {
 			log.Debug("error reading DWARF info", "type", typeName, "error", err)
-			return fieldOffsets, expectedReturns
+			return fieldOffsets, expectedReturns, found
 		}
 	}
 }

@@ -243,6 +243,8 @@ func getDefinitions(
 		extraGroupAttributes[GroupAppKube],
 	)
 
+	spanMetricsAttributes := AttrReportGroup{}
+
 	// The semantic conventions define service.name and service.namespace as
 	// resource attributes, and OBI reports them there. They are also available
 	// as metric-level attributes for backends that read service identity off
@@ -393,6 +395,7 @@ func getDefinitions(
 			attr.HTTPURLScheme:          true,
 			attr.HTTPResponseStatusCode: true,
 			attr.ErrorType:              true,
+			attr.NetworkProtocolVersion: false,
 		},
 		extraGroupAttributes[GroupHTTPCommon],
 	)
@@ -424,21 +427,40 @@ func getDefinitions(
 		},
 		HTTPServerDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.HTTPUrlPath: false,
+				attr.ClientAddr:  false,
+			},
 		},
 		HTTPServerRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		HTTPServerResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpRoutes, &serverInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		HTTPClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientDurationRoutes, &httpClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.HTTPUrlPath: false,
+			},
 		},
 		HTTPClientRequestSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientRoutes, &httpClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		HTTPClientResponseSize.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &httpCommon, &httpClientRoutes, &httpClientInfo},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkProtocolVersion: true,
+			},
 		},
 		RPCClientDuration.Section: {
 			SubGroups: []*AttrReportGroup{&appAttributes, &grpcClientInfo},
@@ -960,11 +982,25 @@ func getDefinitions(
 				attr.NetworkTCPHandshakeRole: false,
 			},
 		},
+		StatTCPResets.Section: {
+			SubGroups: []*AttrReportGroup{&statsAttributes, &statsKubeAttributes},
+			Attributes: map[attr.Name]Default{
+				attr.NetworkIoDirection:   true,
+				attr.NetworkTCPResetCause: false,
+			},
+		},
 
-		// span and service graph metrics don't yet implement attribute selection,
-		// but their values can still be filtered, so we list them here just to
-		// make the filter recognize its attributes
-		// TODO: when service graph and span metrics implement attribute selection, replace this section by proper metric names
+		SpanMetricsLatencyLegacy.Section: spanMetricsAttributes,
+		SpanMetricsCallsLegacy.Section:   spanMetricsAttributes,
+		SpanMetricsDurationOTel.Section:  spanMetricsAttributes,
+		SpanMetricsCallsOTel.Section:     spanMetricsAttributes,
+		SpanMetricsRequestSize.Section:   spanMetricsAttributes,
+		SpanMetricsResponseSize.Section:  spanMetricsAttributes,
+
+		// service graph metrics don't yet implement attribute selection, and the
+		// fixed span metric dimensions are not selectable, but their values can
+		// still be filtered, so we list them here just to make the filter recognize them
+		// TODO: when service graph metrics implement attribute selection, replace this section by proper metric names
 		"---- temporary placeholder for span and service graph metrics ----": {
 			Attributes: map[attr.Name]Default{
 				attr.Client:               false,
@@ -995,8 +1031,8 @@ func copyDisabled(src AttrReportGroup) AttrReportGroup {
 	return dst
 }
 
-// filterOnlyAttributes are span attributes that no metric reports, but that
-// attribute filters still match on.
+// filterOnlyAttributes keeps span attributes available to filters
+// independently of metric reporting.
 var filterOnlyAttributes = []attr.Name{attr.HTTPUrlPath}
 
 // AllAttributeNames returns a set with all the names in the attributes database

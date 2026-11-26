@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	ebpfhttp "go.opentelemetry.io/obi/pkg/ebpf/common/http"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
@@ -45,6 +46,11 @@ var cache = expirable2.NewLRU[svc.UID, []attribute.KeyValue](1024, nil, 5*time.M
 var hostID = &metadata.NodeMeta{HostID: "host-id"}
 
 func BenchmarkGenerateTraces(b *testing.B) {
+	b.Run("spans=1", benchmarkGenerateTracesSingleSpan)
+	b.Run("spans=1000", benchmarkGenerateTracesPipeline)
+}
+
+func benchmarkGenerateTracesSingleSpan(b *testing.B) {
 	start := time.Now()
 
 	span := &request.Span{
@@ -74,6 +80,49 @@ func BenchmarkGenerateTraces(b *testing.B) {
 
 		if traces.ResourceSpans().Len() == 0 {
 			b.Fatal("Generated traces is empty")
+		}
+	}
+}
+
+// benchmarkGenerateTracesPipeline measures grouping, OTLP generation and proto
+// marshaling of a batch of HTTP server spans.
+func benchmarkGenerateTracesPipeline(b *testing.B) {
+	const spanCount = 1000
+
+	spans := make([]request.Span, spanCount)
+	for i := range spans {
+		spans[i] = request.Span{
+			Service:      svc.Attrs{Features: export.FeatureAll, UID: svc.UID{Name: "svc", Instance: "foo"}},
+			Type:         request.EventTypeHTTP,
+			Method:       "GET",
+			Route:        "/route/" + strconv.Itoa(i%50),
+			Status:       200,
+			Path:         "/foo/bar",
+			Peer:         "10.0.0.1",
+			Host:         "svc.local",
+			HostName:     "svc.local",
+			PeerName:     "client",
+			RequestStart: 100,
+			Start:        150,
+			End:          250,
+			TraceID:      [16]byte{1, byte(i), byte(i >> 8)},
+			SpanID:       [8]byte{2, byte(i), byte(i >> 8)},
+		}
+	}
+
+	traceAttrs, err := tracesgen.UserSelectedAttributes(&attributes.SelectorConfig{})
+	require.NoError(b, err)
+	selection := instrumentations.NewInstrumentationSelection([]instrumentations.Instrumentation{instrumentations.InstrumentationALL})
+	var marshaler ptrace.ProtoMarshaler
+
+	b.ReportAllocs()
+	for b.Loop() {
+		groups := tracesgen.GroupSpansWithOptions(b.Context(), spans, traceAttrs, sdktrace.AlwaysSample(), selection, tracesgen.GroupSpansOptions{})
+		for _, group := range groups {
+			traces := tracesgen.GenerateTracesWithSelectedResourceAttributes(cache, &group[0].Span.Service, nil,
+				hostID, group, reporterName, attributes.Selection{})
+			_, err := marshaler.MarshalTraces(traces)
+			require.NoError(b, err)
 		}
 	}
 }
@@ -235,6 +284,17 @@ func TestGenerateTraces(t *testing.T) {
 
 		assert.NotEqual(t, spans.At(0).SpanID().String(), spans.At(1).SpanID().String())
 		assert.NotEqual(t, spans.At(1).SpanID().String(), spans.At(2).SpanID().String())
+
+		queuePhase, ok := spans.At(0).Attributes().Get("obi.request.phase")
+		require.True(t, ok)
+		assert.Equal(t, "queue", queuePhase.Str())
+
+		processingPhase, ok := spans.At(1).Attributes().Get("obi.request.phase")
+		require.True(t, ok)
+		assert.Equal(t, "processing", processingPhase.Str())
+
+		_, ok = spans.At(2).Attributes().Get("obi.request.phase")
+		assert.False(t, ok)
 	})
 
 	t.Run("test with subtraces - ids set bpf layer", func(t *testing.T) {
@@ -381,6 +441,84 @@ func TestGenerateTraces(t *testing.T) {
 		assert.NotEmpty(t, spans.At(0).SpanID().String())
 		assert.NotEmpty(t, spans.At(0).TraceID().String())
 	})
+}
+
+func TestRequestPhaseSpans(t *testing.T) {
+	tests := []struct {
+		name         string
+		eventType    request.EventType
+		httpDisabled bool
+		wantSpans    int
+	}{
+		{name: "HTTP enabled", eventType: request.EventTypeHTTP, wantSpans: 3},
+		{name: "HTTP disabled", eventType: request.EventTypeHTTP, httpDisabled: true, wantSpans: 1},
+		{name: "HTTP client unaffected", eventType: request.EventTypeHTTPClient, httpDisabled: true, wantSpans: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			receiver := makeTracesTestReceiver([]instrumentations.Instrumentation{
+				instrumentations.InstrumentationHTTP,
+			})
+			receiver.cfg.DisableHTTPRequestPhaseSpans = tt.httpDisabled
+
+			start := time.Now()
+
+			inputLink := request.SpanLink{
+				TraceID:    idgen.RandomTraceID(),
+				SpanID:     idgen.RandomSpanID(),
+				TraceFlags: uint8(trace.FlagsSampled),
+			}
+
+			input := request.Span{
+				Type:         tt.eventType,
+				RequestStart: start.UnixNano(),
+				Start:        start.Add(time.Second).UnixNano(),
+				End:          start.Add(3 * time.Second).UnixNano(),
+				Method:       "GET",
+				Path:         "/test",
+				Route:        "/test",
+				TraceID:      idgen.RandomTraceID(),
+				SpanID:       idgen.RandomSpanID(),
+				ParentSpanID: idgen.RandomSpanID(),
+				Links:        []request.SpanLink{inputLink},
+			}
+
+			var exported []ptrace.Traces
+			exporter := TestExporter{
+				collector: func(td ptrace.Traces) {
+					exported = append(exported, td)
+				},
+			}
+
+			receiver.processSpans(
+				t.Context(), exporter, []request.Span{input},
+				nil, sdktrace.AlwaysSample(),
+			)
+
+			require.Len(t, exported, 1)
+			require.Equal(t, 1, exported[0].ResourceSpans().Len())
+			require.Equal(t, 1, exported[0].ResourceSpans().At(0).ScopeSpans().Len())
+
+			spans := exported[0].ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+			require.Equal(t, tt.wantSpans, spans.Len())
+
+			requestSpan := spans.At(spans.Len() - 1)
+			assert.Equal(t, input.TraceID.String(), requestSpan.TraceID().String())
+			assert.Equal(t, input.ParentSpanID.String(), requestSpan.ParentSpanID().String())
+
+			if tt.wantSpans == 1 {
+				assert.Equal(t, input.SpanID.String(), requestSpan.SpanID().String())
+				ensureTraceAttrNotExists(t, requestSpan.Attributes(), "obi.request.phase")
+
+				require.Equal(t, 1, requestSpan.Links().Len())
+				link := requestSpan.Links().At(0)
+				assert.Equal(t, inputLink.TraceID.String(), link.TraceID().String())
+				assert.Equal(t, inputLink.SpanID.String(), link.SpanID().String())
+				assert.Equal(t, uint32(inputLink.TraceFlags), link.Flags())
+			}
+		})
+	}
 }
 
 func TestGenerateTracesAttributes(t *testing.T) {
@@ -2271,7 +2409,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		attrs := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Attributes()
 		ensureTraceStrAttr(t, attrs, semconv.URLFullKey, "https://api.example.com/external/api?foo=bar")
 	})
-	t.Run("test HTTP client url.full includes query and url.query is not emitted", func(t *testing.T) {
+	t.Run("test HTTP client url.full includes query with opt-in", func(t *testing.T) {
 		span := request.Span{
 			Type:      request.EventTypeHTTPClient,
 			Method:    "GET",
@@ -2289,9 +2427,9 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Attributes()
 		ensureTraceStrAttr(t, attrs, semconv.URLFullKey, "https://api.example.com/external/api?foo=bar")
-		ensureTraceAttrNotExists(t, attrs, semconv.URLQueryKey)
+		ensureTraceStrAttr(t, attrs, semconv.URLQueryKey, "foo=bar")
 	})
-	t.Run("test HTTP client url.query is not emitted even when selected", func(t *testing.T) {
+	t.Run("test HTTP client url.full includes query through selector config opt-in", func(t *testing.T) {
 		tr := makeTracesTestReceiver([]instrumentations.Instrumentation{instrumentations.InstrumentationHTTP})
 		tr.selectorCfg = &attributes.SelectorConfig{
 			SelectionCfg: attributes.Selection{
@@ -2316,7 +2454,7 @@ func TestGenerateTracesAttributes(t *testing.T) {
 
 		attrs := traces[0].ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Attributes()
 		ensureTraceStrAttr(t, attrs, semconv.URLFullKey, "https://api.example.com/external/api?foo=bar")
-		ensureTraceAttrNotExists(t, attrs, semconv.URLQueryKey)
+		ensureTraceStrAttr(t, attrs, semconv.URLQueryKey, "foo=bar")
 	})
 	t.Run("test HTTP client url.full falls back to Path when FullPath is empty", func(t *testing.T) {
 		span := request.Span{

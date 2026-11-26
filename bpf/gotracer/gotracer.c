@@ -25,11 +25,16 @@
 
 #include <gotracer/go_offsets.h>
 
+enum { k_max_go_executable_identity_requests = 64 };
+
+// Serialized transient TID entry held only during uprobe_register; userspace
+// inserts and deletes entries, BPF only looks up and updates in place.
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u32);
     __type(value, go_executable_key_t);
-    __uint(max_entries, MAX_GO_PROGRAMS);
+    __uint(max_entries, k_max_go_executable_identity_requests);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
     __uint(pinning, OBI_PIN_INTERNAL);
 } go_executable_identity_requests SEC(".maps");
 
@@ -50,6 +55,7 @@ int GUARDED_PROG(obi_capture_go_executable_identity, struct pt_regs *, ctx) {
 #include "go_net.c"
 #include "go_net_tls.c"
 #include "go_nethttp.c"
+#include "go_errors.c"
 #include "go_sql.c"
 #include "go_grpc.c"
 
@@ -74,5 +80,8 @@ int GUARDED_PROG(obi_uprobe_h2FramerWriteContinuation_returns, struct pt_regs *,
 #include "go_mongo.c"
 //FIXME - move common code to common location
 #include "generictracer/protocol_handler.c"
+
+// Force payload BTF emission for bpf2go.
+const go_exception_payload_t *unused_go_exception_payload __attribute__((unused));
 
 char __license[] SEC("license") = "Dual MIT/GPL";

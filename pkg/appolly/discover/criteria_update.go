@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
-// CriteriaUpdater replaces discovery predicates without restarting the instrumentation pipeline.
+// CriteriaUpdater replaces discovery predicates and sampling without restarting the instrumentation pipeline.
 // Exporter callbacks and endpoint providers remain those supplied at startup.
 // Pass it to instrumenter.WithCriteriaUpdater. Configurations must not be mutated after submission.
 // Create a new updater for each pipeline run.
@@ -32,6 +32,7 @@ type CriteriaUpdater struct {
 	metricHeaders map[string]string
 	logHeaders    map[string]string
 	features      export.Features
+	jobTraces     bool
 	updates       *services.CriteriaUpdates
 }
 
@@ -42,9 +43,11 @@ func NewCriteriaUpdater(cfg *obi.Config) *CriteriaUpdater {
 		metricHeaders: injectedHeaders(cfg.OTELMetrics.InjectHeaders),
 		logHeaders:    injectedHeaders(cfg.Logs.InjectHeaders),
 		features:      cfg.JoinMetricsConfig().Features,
-		updates: services.NewCriteriaUpdates(
+		jobTraces:     cfg.JobTracesEnabled(),
+		updates: services.NewCriteriaUpdatesWithSampler(
 			refreshableCriteria(cfg),
 			ExcludingCriteria(cfg),
+			&cfg.Traces.SamplerConfig,
 		),
 	}
 }
@@ -60,11 +63,16 @@ func (u *CriteriaUpdater) Update(ctx context.Context, cfg *obi.Config) error {
 		!maps.Equal(u.traceHeaders, injectedHeaders(cfg.Traces.InjectHeaders)) ||
 		!maps.Equal(u.metricHeaders, injectedHeaders(cfg.OTELMetrics.InjectHeaders)) ||
 		!maps.Equal(u.logHeaders, injectedHeaders(cfg.Logs.InjectHeaders)) {
-		return errors.New("only discovery selection criteria can be refreshed; restart OBI to apply other configuration changes")
+		return errors.New("only discovery selection criteria and sampling can be refreshed; restart OBI to apply other configuration changes")
 	}
 
 	if cfg.JoinMetricsConfig().Features&^(u.features|export.FeatureEmpty) != 0 {
 		return errors.New("new metric features require pipeline initialization; restart OBI to apply this configuration")
+	}
+
+	// the eBPF job code is compiled out when every workload turned job traces off at startup
+	if cfg.JobTracesEnabled() && !u.jobTraces {
+		return errors.New("job traces were off for every workload at startup; restart OBI to apply this configuration")
 	}
 
 	if err := cfg.Discovery.Validate(); err != nil {
@@ -77,7 +85,7 @@ func (u *CriteriaUpdater) Update(ctx context.Context, cfg *obi.Config) error {
 		return err
 	}
 
-	return u.updates.Replace(ctx, include, exclude)
+	return u.updates.ReplaceWithSampler(ctx, include, exclude, &cfg.Traces.SamplerConfig)
 }
 
 func withoutSelectionAndSinks(cfg *obi.Config) obi.Config {
@@ -87,6 +95,7 @@ func withoutSelectionAndSinks(cfg *obi.Config) obi.Config {
 	fixed.Traces.TracesExport = nil
 	fixed.Traces.OTLPEndpointProvider = nil
 	fixed.Traces.InjectHeaders = nil
+	fixed.Traces.SamplerConfig = services.SamplerConfig{}
 	fixed.OTELMetrics.MetricsExport = nil
 	fixed.OTELMetrics.OTLPEndpointProvider = nil
 	fixed.OTELMetrics.InjectHeaders = nil
@@ -121,6 +130,7 @@ type selectorSettings struct {
 	routes     *services.CustomRoutesConfig
 	metrics    perapp.SvcMetricsConfig
 	exceptions *services.ExceptionsOverride
+	jobTraces  bool
 }
 
 func settingsFor(s services.Selector) selectorSettings {
@@ -131,7 +141,8 @@ func settingsFor(s services.Selector) selectorSettings {
 		sampler:    s.GetSamplerConfig(),
 		routes:     s.GetRoutesConfig(),
 		metrics:    s.MetricsConfig(),
-		exceptions: s.GetExceptionsConfig(),
+		exceptions: selectorExceptions(s),
+		jobTraces:  selectorJobTraces(s),
 	}
 }
 
@@ -152,6 +163,25 @@ func (s selectorSettings) withoutExplicitDefaults() selectorSettings {
 
 func sameSettings(a, b selectorSettings) bool {
 	return reflect.DeepEqual(a.withoutExplicitDefaults(), b.withoutExplicitDefaults())
+}
+
+// fixed leaves out the settings a refresh can change.
+func (s selectorSettings) fixed() selectorSettings {
+	s.sampler = nil
+	return s
+}
+
+func sameFixedSettings(a, b selectorSettings) bool {
+	return sameSettings(a.fixed(), b.fixed())
+}
+
+// samplingConfig is the sampler of the last matching criterion that sets one, or else the
+// match's global sampler. Nil leaves the startup global sampler to apply.
+func samplingConfig(match ProcessMatch) *services.SamplerConfig {
+	if sampler := matchingSettings(match.Criteria).sampler; sampler != nil {
+		return sampler
+	}
+	return match.SamplerConfig
 }
 
 func matchingSettings(criteria []services.Selector) selectorSettings {
@@ -180,6 +210,7 @@ func matchingSettings(criteria []services.Selector) selectorSettings {
 
 		settings.metrics = next.metrics
 		settings.exceptions = next.exceptions
+		settings.jobTraces = next.jobTraces
 	}
 	return settings
 }
@@ -204,6 +235,9 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 	next.observed = maps.Clone(m.observed)
 	next.Criteria = update.Include
 	next.ExcludeCriteria = update.Exclude
+	if update.SamplerConfig != nil {
+		next.samplerConfig = update.SamplerConfig
+	}
 	next.ProcessHistory = map[app.PID]ProcessMatch{}
 	freshPorts, err := next.refreshRetainedPorts(update.Context, m)
 	if err != nil {
@@ -221,13 +255,16 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 	for pid, previous := range m.ProcessHistory {
 		replacement, retained := next.ProcessHistory[pid]
 		if retained {
-			matchingSettings := sameSettings(matchingSettings(previous.Criteria), matchingSettings(replacement.Criteria))
+			matchingSettings := sameFixedSettings(matchingSettings(previous.Criteria), matchingSettings(replacement.Criteria))
 			if !matchingSettings ||
 				previous.LogEnricherEnabled() != replacement.LogEnricherEnabled() {
 				if !hasConflict || pid < conflictingPID {
 					conflictingPID = pid
 				}
 				hasConflict = true
+			}
+			if !reflect.DeepEqual(samplingConfig(previous), samplingConfig(replacement)) {
+				events = append(events, Event[ProcessMatch]{Type: EventUpdated, Obj: replacement})
 			}
 			continue
 		}
@@ -271,6 +308,7 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 	m.observed = next.observed
 	m.Criteria = next.Criteria
 	m.ExcludeCriteria = next.ExcludeCriteria
+	m.samplerConfig = next.samplerConfig
 	m.ProcessHistory = next.ProcessHistory
 
 	if len(events) > 0 {
@@ -397,7 +435,7 @@ func compatibleDefinitions(current, next []services.Selector) error {
 
 		found := false
 		for _, settings := range previous {
-			if sameSettings(settings, settingsFor(candidate)) {
+			if sameFixedSettings(settings, settingsFor(candidate)) {
 				found = true
 				break
 			}
@@ -412,7 +450,17 @@ func compatibleDefinitions(current, next []services.Selector) error {
 }
 
 func predicateKey(selector services.Selector) (string, error) {
-	var predicates any
+	predicates, err := selectorPredicates(selector)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := yaml.Marshal(predicates)
+	return string(data), err
+}
+
+// selectorPredicates copies a selector without its service settings, which settingsFor reads.
+func selectorPredicates(selector services.Selector) (any, error) {
 	switch value := selector.(type) {
 	case *services.GlobAttributes:
 		match := *value
@@ -422,7 +470,7 @@ func predicateKey(selector services.Selector) (string, error) {
 		match.SamplerConfig = nil
 		match.Routes = nil
 		match.Metrics = perapp.SvcMetricsConfig{}
-		predicates = match
+		return match, nil
 	case *services.RegexSelector:
 		match := *value
 		match.Name = ""
@@ -431,13 +479,22 @@ func predicateKey(selector services.Selector) (string, error) {
 		match.SamplerConfig = nil
 		match.Routes = nil
 		match.Metrics = perapp.SvcMetricsConfig{}
-		predicates = match
+		return match, nil
 	default:
-		return "", errors.New("unsupported discovery selector for config refresh; restart OBI")
+		return nil, errors.New("unsupported discovery selector for config refresh; restart OBI")
+	}
+}
+
+// sameCriterion reports whether two selectors are the same rule, apart from the settings a refresh can change.
+func sameCriterion(a, b services.Selector) bool {
+	aPredicates, aErr := selectorPredicates(a)
+	bPredicates, bErr := selectorPredicates(b)
+	if aErr != nil || bErr != nil {
+		return reflect.DeepEqual(a, b)
 	}
 
-	data, err := yaml.Marshal(predicates)
-	return string(data), err
+	return reflect.DeepEqual(aPredicates, bPredicates) &&
+		reflect.DeepEqual(settingsFor(a).fixed(), settingsFor(b).fixed())
 }
 
 func definitionsKeepSettings(current, next []services.Selector) bool {
@@ -448,7 +505,7 @@ func definitionsKeepSettings(current, next []services.Selector) bool {
 		matched := -1
 
 		for i, previous := range remaining {
-			if sameSettings(settingsFor(previous), settingsFor(candidate)) {
+			if sameFixedSettings(settingsFor(previous), settingsFor(candidate)) {
 				matched = i
 				break
 			}

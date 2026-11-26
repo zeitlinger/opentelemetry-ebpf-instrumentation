@@ -60,7 +60,7 @@ make docker-generate # or make generate
 make compile
 ```
 
-Both generate targets build the eBPF code for amd64 and arm64. To iterate faster locally, `BPF_TARGETS` selects a single architecture, for example `make generate BPF_TARGETS=arm64`.
+Both generate targets build the eBPF code for amd64 and arm64. To iterate faster locally, `BPF_TARGETS` selects a single architecture, for example `make generate BPF_TARGETS=arm64`. A full generation compiles the packages in parallel, one process per CPU; `BPF_GENERATE_JOBS` sets a different number.
 
 A convenience `Makefile` target called `dev` which invokes both the generation and compilation step is also provided:
 
@@ -156,8 +156,15 @@ make integration-test-k8s
 ```
 
 This separate suite creates a local Kind cluster and also requires Docker.
-Protocol-specific OATS suites are available through `make oats-test-*` targets;
-see the [OATS test directories](internal/test/oats/) for the available suites.
+Protocol-specific OATS suites use the pinned OATS v0.11.0 CLI and are available
+through `make oats-test-<suite>` targets; see the
+[OATS test directories](internal/test/oats/) for the available suites. On a
+local Linux host, the target generates BPF bindings and builds the `hatest-obi`
+image from the current checkout. It installs OATS and gcx into the
+ignored `.tools/oats/` directory and stores OATS output, Compose logs, and
+Weaver reports under the suite's `build/` directory. CI supplies the
+prebuilt `hatest-obi` image to each shard to avoid rebuilding it; the Java TLS
+fixtures retain their dedicated Java-agent image builds.
 Kernel/VM integration runs use dedicated CI VM setup and are not part of the
 usual local test loop; see the [VM integration workflow](.github/workflows/workflow_integration_tests_vm.yml).
 

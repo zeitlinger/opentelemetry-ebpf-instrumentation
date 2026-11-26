@@ -110,6 +110,23 @@ published, immutable schema.
 The release owner drains this list into the release notes at release prep, and leaves the
 section empty once drained.
 
+- Parsed HTTP spans accept `http` and `https` from the full-parser URL; other or missing
+  schemes fall back to the captured TLS flag. `url.scheme` on HTTP client and server spans
+  and their corresponding HTTP metrics changes when the parsed URL has a non-HTTP(S) scheme;
+  missing schemes retain the existing TLS-flag fallback. URL path rendering is unchanged.
+  For forward proxies, the parsed URL scheme can describe the upstream request rather than
+  the client-to-proxy transport.
+
+- HTTP metrics support `network.protocol.version` (`network_protocol_version` in
+  Prometheus). It is opt-in on the stable duration metrics to preserve existing series,
+  and enabled by default on the development body-size metrics. Select it through
+  `attributes.select` to split duration series by HTTP version. When selected, unknown
+  versions are omitted from OTLP attributes and use an empty Prometheus label.
+
+- HTTP metric data points for requests without a known route (for example with
+  `routes.incoming.unmatched: unset` or `routes.outgoing.unmatched: unset`) omit `http.route` (server) and `url.template` (client) in OTLP
+  instead of carrying an empty string, matching the spans. Prometheus labels are unchanged.
+
 - A SQL++ span from a server other than Couchbase (`db.system.name` `other_sql`) that names no
   collection or bucket is named `{db.operation.name}`, like other SQL spans, instead of
   `{db.operation.name} {server.address}:{server.port}`. Couchbase SQL++ spans are unchanged.
@@ -122,13 +139,18 @@ section empty once drained.
   As in semconv, `url.template` is on by default on the two body-size metrics but opt-in on
   `http.client.request.duration`, so client duration series no longer split by route unless
   `url.template` is selected.
-- The HTTP metrics no longer offer `url.path`, and the HTTP server metrics and
-  `rpc.server.call.duration` no longer offer `client.address`, following the semantic
-  conventions, which exclude these high-cardinality attributes from metrics. Both were opt-in,
-  so only an `attributes.select` that included them changes. `url.path` can still be used in
-  attribute filters, and the spans keep both attributes.
-- HTTP client spans no longer carry `url.query`; the scrubbed query string remains part of
-  `url.full`. HTTP server spans keep `url.query`.
+- The development HTTP body-size metrics no longer offer `url.path`, and the HTTP server
+  body-size metrics and release-candidate `rpc.server.call.duration` no longer offer
+  `client.address`. These attributes remain available on the stable HTTP duration metrics.
+  They were opt-in, so only selections including them change. Attribute filters and spans
+  retain these attributes.
+- The opt-in `url.path` dimension on both stable HTTP duration metrics and `client.address`
+  on `http.server.request.duration` are deprecated as high-cardinality OBI extensions
+  outside the HTTP metric semantic conventions. They remain supported throughout OBI v1,
+  with removal planned for OBI v2. The notice also applies to the Prometheus labels
+  `url_path` and `client_address`. Use `http.route` on server duration metrics or opt into
+  `url.template` on client duration metrics for route aggregation, and spans for raw paths
+  or client addresses. See the [migration guidance](../TELEMETRY.md#deprecated-http-metric-dimensions).
 - The span reference (`site/docs/spans.md`) documents every span's name. The emitted
   telemetry is unchanged.
 - The trace resource no longer carries `otel.scope.name`. Spans now carry the instrumentation
@@ -147,6 +169,38 @@ section empty once drained.
   `count`. This changes the span names and `db.operation.name` on `db.client.operation.duration`,
   and `span.name` on the span metrics. Commands that don't go through a probed `Collection`
   method, such as `BulkWrite`, are now reported as well, which adds spans and metric series.
+- HTTP server spans and metrics now derive `server.address` from the captured HTTP request
+  host, without its port, instead of the resolved service name. When the request host is
+  unavailable, the OTLP attribute is omitted and the Prometheus label is empty.
+- The Prometheus `bpf_probe_latency_seconds` histogram (`ebpf` metrics feature) exposes
+  cumulative `le` bucket counts for every bound, including empty buckets, instead of
+  per-bucket counts for the bounds that received executions only. Bucket values grow and new
+  `le` series appear, and `histogram_quantile` over this metric now returns correct values.
+  The OTLP `obi.bpf.probe.latency` histogram is unchanged.
+- MySQL and MariaDB spans and the database operation duration metrics carry `db.namespace` once
+  OBI has seen the connection's handshake or a database change, so their metric series split by
+  database.
+- MySQL and MariaDB spans for statements that name no table are named
+  `{db.operation.name} {db.namespace}` when the database is known (`SELECT sakila` instead of
+  `SELECT`). This changes `span.name` on the span metrics as well.
+- The Prometheus `bpf_probe_latency_seconds` histogram (`ebpf` metrics feature) reports
+  programs of every type on the node instead of only kprobe, socket filter, TC, `sk_msg` and
+  `sockops` programs, so tracepoint, raw tracepoint, XDP, cgroup and `Tracing` programs add
+  series. On cgroup v2 nodes, container runtimes load one cgroup device program per
+  container, so the histogram gains one set of series per container, under a new
+  `bpf_probe_id` after each container restart. The internal BPF probe metrics (`obi.bpf.probe.latency`,
+  `obi_bpf_probe_executions_total`, `obi_bpf_probe_latency_seconds_total`) cover only the
+  programs OBI loaded, of every type: series of other eBPF tools on the node disappear, and
+  series of OBI's tracepoint, raw tracepoint, XDP and `Tracing` programs appear.
+- `obi.stat.tcp.io` (`obi_stat_tcp_io_bytes_total` in Prometheus) counts the bytes sent by
+  sockets that context propagation tracks, which it missed before. Transmit values grow on
+  hosts with context propagation enabled, in both OTLP and Prometheus. Kernel TLS sends are
+  counted too, and on kernels before 6.5 every sendpage path: `sendfile()`, splice, and
+  in-kernel senders such as NFS, NVMe/TCP, iSCSI, Ceph and ESP-in-TCP.
+- A worker that takes jobs off a Redis queue outside a request gets one trace per job, rooted
+  at the fetch that took it, instead of a trace per call. Spans and metrics are unchanged; the
+  client spans of a job gain a parent. A Config v2 rule turns it off with
+  `refine.group_job_spans: false`. See [Queue Job Traces](queue-job-traces.md).
 
 ## Hosting notes
 

@@ -108,6 +108,8 @@ var DefaultSensitiveQueryParams = []string{
 type SensitiveQueryParamsConfig struct {
 	Add    []string `yaml:"add" env:"OTEL_EBPF_SENSITIVE_QUERY_PARAMS_ADD" envSeparator:","`
 	Remove []string `yaml:"remove" env:"OTEL_EBPF_SENSITIVE_QUERY_PARAMS_REMOVE" envSeparator:","`
+	// Replacement is set only by Config v2. Nil preserves REDACTED.
+	Replacement *string `yaml:"-" env:"-" json:"-"`
 }
 
 func (c SensitiveQueryParamsConfig) Effective() []string {
@@ -132,14 +134,16 @@ type SelectorConfig struct {
 	SelectionCfg            Selection
 	ExtraGroupAttributesCfg map[string][]attr.Name
 	SensitiveQueryParamsCfg SensitiveQueryParamsConfig
-	SanitizeSQLQueryText    bool
+	SanitizeDBQueryText     bool
+	UseV2Selection          bool
 }
 
 // AttrSelector returns, for each metric, the attributes that have to be reported
 // according to the user-provided selection and/or other conditions (e.g. kubernetes is enabled)
 type AttrSelector struct {
-	definition map[Section]AttrReportGroup
-	selector   Selection
+	definition     map[Section]AttrReportGroup
+	selector       Selection
+	useV2Selection bool
 }
 
 // exactIncludeOnlyAttrs contains optional attributes that must be selected by
@@ -177,8 +181,9 @@ func NewCustomAttrSelector(
 
 	// TODO: validate
 	return &AttrSelector{
-		selector:   cfg.SelectionCfg,
-		definition: definitions,
+		selector:       cfg.SelectionCfg,
+		useV2Selection: cfg.UseV2Selection,
+		definition:     definitions,
 	}, nil
 }
 
@@ -188,7 +193,7 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 	if !ok {
 		panic(fmt.Sprintf("BUG! metric not found %+v", metricName))
 	}
-	allInclusionLists := p.selector.Matching(metricName)
+	allInclusionLists := p.matching(metricName)
 	if len(allInclusionLists) == 0 {
 		// if the user did not provide any selector, return the default attributes for that metric
 		attrs := maps2.SetToSlice(attributeNames.Default())
@@ -212,13 +217,87 @@ func (p *AttrSelector) For(metricName Name) []attr.Name {
 	return sas
 }
 
+var spanMetricFixedAttrs = []attr.Name{
+	attr.ServiceName,
+	attr.ServiceNamespace,
+	attr.ServiceInstanceID,
+	attr.SpanName,
+	attr.SpanKind,
+	attr.StatusCode,
+	attr.Source,
+	attr.TelemetrySDKLanguage,
+	attr.Instance,
+	attr.Job,
+}
+
+// UsesV2Selection reports whether the selector applies Config v2 selection semantics.
+func (p *AttrSelector) UsesV2Selection() bool {
+	return p.useV2Selection
+}
+
+// ForSpanMetrics returns the workload metadata keys added to span metrics that are
+// reported together, so they share one label set. Span metrics define no selectable
+// attributes: only exact include entries add a metadata key, and patterns only exclude.
+// Pattern sections apply before exact sections, and within each an exclusion wins.
+// With v2 selection, the legacy keys are added after the selection.
+func (p *AttrSelector) ForSpanMetrics(legacy []attr.Name, metricNames ...Name) []attr.Name {
+	if !p.useV2Selection {
+		return legacy
+	}
+
+	selected := map[string]attr.Name{}
+	globs, exact := p.selector.MatchingV2Layers(metricNames...)
+	applySpanMetricSelection(selected, globs)
+	applySpanMetricSelection(selected, exact)
+	for _, name := range legacy {
+		if _, ok := selected[name.Prom()]; !ok {
+			selected[name.Prom()] = name
+		}
+	}
+
+	maps.DeleteFunc(selected, func(_ string, name attr.Name) bool {
+		return slices.ContainsFunc(spanMetricFixedAttrs, func(fixed attr.Name) bool {
+			return fixed.Prom() == name.Prom()
+		})
+	})
+	names := slices.Collect(maps.Values(selected))
+	slices.Sort(names)
+	return names
+}
+
+func applySpanMetricSelection(selected map[string]attr.Name, lists []InclusionLists) {
+	for _, il := range lists {
+		for _, incl := range il.Include {
+			if IsGlob(incl) {
+				continue
+			}
+			name := attr.Name(incl)
+			if _, ok := selected[name.Prom()]; !ok {
+				selected[name.Prom()] = name
+			}
+		}
+	}
+	for _, il := range lists {
+		maps.DeleteFunc(selected, func(_ string, name attr.Name) bool {
+			return il.excludes(name)
+		})
+	}
+}
+
 func (p *AttrSelector) ExplicitlyIncluded(metricName Name, attrName attr.Name) bool {
-	for _, il := range p.selector.Matching(metricName) {
+	for _, il := range p.matching(metricName) {
 		if il.includes(attrName) {
 			return true
 		}
 	}
 	return false
+}
+
+func (p *AttrSelector) matching(metricName Name) []InclusionLists {
+	if p.useV2Selection {
+		return p.selector.MatchingV2(metricName)
+	}
+	return p.selector.Matching(metricName)
 }
 
 // returns if the inclusion list have contents or not

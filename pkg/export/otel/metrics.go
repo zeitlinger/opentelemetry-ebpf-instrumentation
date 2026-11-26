@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -29,6 +30,7 @@ import (
 	instrument "go.opentelemetry.io/obi/pkg/export/otel/metric/api/metric"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
+	"go.opentelemetry.io/obi/pkg/internal/shutdown"
 	"go.opentelemetry.io/obi/pkg/metadata"
 	"go.opentelemetry.io/obi/pkg/pipe/global"
 	"go.opentelemetry.io/obi/pkg/pipe/msg"
@@ -62,19 +64,21 @@ var MetricTypes = []string{
 // instances and forwards them as OTEL metrics.
 type MetricsReporter struct {
 	ctx              context.Context
+	evictions        sync.WaitGroup
 	cfg              *otelcfg.MetricsConfig
 	jointMetricsCfg  *perapp.GlobalMetricsConfig
 	nodeMeta         metadata.NodeMeta
 	attributes       *attributes.AttrSelector
 	exporter         sdkmetric.Exporter
 	reporters        otelcfg.ReporterPool[*svc.Attrs, *Metrics]
+	systemProvider   *metric.MeterProvider
 	targetInfo       instrument.Int64UpDownCounter
 	tracesTargetInfo instrument.Int64UpDownCounter
 	pidTracker       PidServiceTracker
 	is               instrumentations.InstrumentationSelection
 	targetMetrics    map[svc.UID]*TargetMetrics
 	attrGetters      attributes.NamedGetters[*request.Span, attribute.KeyValue]
-	spanExtraAttrs   []attr.Name
+	spanExtraAttrs   spanMetricExtraAttrs
 
 	// user-selected fields for each of the reported metrics
 	attrHTTPDuration              []attributes.Field[*request.Span, attribute.KeyValue]
@@ -230,7 +234,7 @@ func newMetricsReporter(
 	unresolved request.UnresolvedNames,
 	input *msg.Queue[[]request.Span],
 	processEventCh *msg.Queue[exec.ProcessEvent],
-) (*MetricsReporter, error) {
+) (_ *MetricsReporter, retErr error) {
 	log := mlog()
 
 	attribProvider, err := attributes.NewAttrSelector(ctxInfo.MetricAttributeGroups, selectorCfg)
@@ -255,9 +259,14 @@ func newMetricsReporter(
 		attrGetters:         request.SpanOTELGetters(unresolved),
 	}
 
-	mr.spanExtraAttrs = []attr.Name{}
+	legacySpanExtraAttrs := []attr.Name{}
 	for _, label := range cfg.ExtraSpanResourceLabels {
-		mr.spanExtraAttrs = append(mr.spanExtraAttrs, attr.Name(label))
+		legacySpanExtraAttrs = append(legacySpanExtraAttrs, attr.Name(label))
+	}
+	mr.spanExtraAttrs = spanMetricExtraAttrs{
+		requests: attribProvider.ForSpanMetrics(legacySpanExtraAttrs, mr.spanMetricsDuration(), mr.spanMetricsCalls()),
+		sizes:    attribProvider.ForSpanMetrics(legacySpanExtraAttrs, attributes.SpanMetricsRequestSize, attributes.SpanMetricsResponseSize),
+		aliases:  attribProvider.UsesV2Selection(),
 	}
 
 	mr.createEventMetrics = mr.createTargetMetricData
@@ -364,17 +373,20 @@ func newMetricsReporter(
 		func(id svc.UID, v *Metrics) {
 			llog := log.With("service", id)
 			llog.Debug("evicting metrics reporter from cache")
-			v.cleanupAllMetricsInstances()
+			v.closeAllMCPSessions()
 
 			if !mr.pidTracker.ServiceLive(id) {
 				mr.deleteTargetMetrics(&id)
 			}
 
-			go func() {
-				if err := v.provider.Shutdown(ctx); err != nil {
+			mr.evictions.Go(func() {
+				shutdownCtx, cancel := shutdownContext(ctx)
+				defer cancel()
+				if err := v.provider.Shutdown(shutdownCtx); err != nil {
 					llog.Warn("error shutting down evicted metrics provider", "error", err)
 				}
-			}()
+				v.cleanupAllMetricsInstances()
+			})
 		}, mr.newMetricSet)
 	if err != nil {
 		return nil, fmt.Errorf("creating metrics reporters pool: %w", err)
@@ -384,19 +396,15 @@ func newMetricsReporter(
 	if err != nil {
 		return nil, err
 	}
+	defer releaseExporterOnError(ctx, exporter, &retErr)
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
 
 	mr.pidTracker = NewPidServiceTracker()
 
-	systemMetrics := mr.newMetricsInstance(nil)
-	systemMeter := systemMetrics.provider.Meter(reporterName, obiMeterOptions()...)
-
-	if err := mr.setupTargetInfo(systemMeter); err != nil {
-		return nil, fmt.Errorf("setting up target info: %w", err)
-	}
-
-	if err := mr.setupTracesTargetInfo(systemMeter); err != nil {
-		return nil, fmt.Errorf("setting up traces target info: %w", err)
+	if !jointMetricsCfg.DisableTargetInfo {
+		if err := mr.setupSystemMetrics(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &mr, nil
@@ -497,6 +505,22 @@ func (mr *MetricsReporter) spanMetricOptions() []metric.Option {
 	return []metric.Option{
 		metric.WithView(mr.otelHistogramConfig(mr.spanMetricsLatencyName(), mr.cfg.Buckets.DurationHistogram)),
 	}
+}
+
+func (mr *MetricsReporter) setupSystemMetrics() error {
+	systemMetrics := mr.newMetricsInstance(nil)
+	mr.systemProvider = systemMetrics.provider
+	systemMeter := systemMetrics.provider.Meter(reporterName, obiMeterOptions()...)
+
+	if err := mr.setupTargetInfo(systemMeter); err != nil {
+		return fmt.Errorf("setting up target info: %w", err)
+	}
+
+	if err := mr.setupTracesTargetInfo(systemMeter); err != nil {
+		return fmt.Errorf("setting up traces target info: %w", err)
+	}
+
+	return nil
 }
 
 func (mr *MetricsReporter) setupTargetInfo(meter instrument.Meter) error {
@@ -784,12 +808,16 @@ func (mr *MetricsReporter) setupOtelMeters(m *Metrics, meter instrument.Meter) e
 	return nil
 }
 
-func (mr *MetricsReporter) spanMetricsCallsName() string {
+func (mr *MetricsReporter) spanMetricsCalls() attributes.Name {
 	if mr.usesLegacySpanNames() {
-		return attributes.SpanMetricsCallsLegacy.OTEL
+		return attributes.SpanMetricsCallsLegacy
 	}
 
-	return attributes.SpanMetricsCallsOTel.OTEL
+	return attributes.SpanMetricsCallsOTel
+}
+
+func (mr *MetricsReporter) spanMetricsCallsName() string {
+	return mr.spanMetricsCalls().OTEL
 }
 
 func (mr *MetricsReporter) setupSpanSizeMeters(m *Metrics, meter instrument.Meter) error {
@@ -872,6 +900,7 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 		metric.WithResource(resources),
 		metric.WithReader(metric.NewPeriodicReader(sharedExporter{mr.exporter},
 			metric.WithInterval(mr.cfg.Interval))),
+		metric.WithExemplarFilter(mr.cfg.GetExemplarFilter()),
 	}
 
 	opts = append(opts, mr.otelMetricOptions()...)
@@ -947,32 +976,51 @@ func (mr *MetricsReporter) isExponentialAggregation() bool {
 // export timeout the SDK PeriodicReader applies when the caller sets no deadline.
 const shutdownTimeout = 30 * time.Second
 
-// shutdownContext returns a context for the reporter's final collection/export.
-// On the normal shutdown path ctx.Done() is what exits reportMetrics, so mr.ctx is
+// shutdownContext returns a context for a reporter's final collection/export.
+// On the normal shutdown path ctx.Done() is what exits the reporter, so its context is
 // already canceled and would abort the flush; the returned context is detached from
-// it and bounded instead.
-func (mr *MetricsReporter) shutdownContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(mr.ctx), shutdownTimeout)
+// it and bounded by the remaining shutdown budget instead.
+func shutdownContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return shutdown.Bounded(ctx, shutdownTimeout)
+}
+
+func waitWithin(ctx context.Context, wg *sync.WaitGroup) {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 func (mr *MetricsReporter) close() {
 	// Drain every per-service metric set before shutting down the shared exporter.
 	// provider.Shutdown performs a final collection/export, so sessions and other
 	// pending observations are flushed even when the process stops before TTL eviction.
-	shutdownCtx, cancel := mr.shutdownContext()
+	shutdownCtx, cancel := shutdownContext(mr.ctx)
 	defer cancel()
 	mr.reporters.ForEach(func(id svc.UID, m *Metrics) {
 		llog := mlog().With("service", id)
 		llog.Debug("shutting down metrics reporter")
-		m.cleanupAllMetricsInstances()
+		m.closeAllMCPSessions()
 		if err := m.provider.Shutdown(shutdownCtx); err != nil {
 			llog.Warn("error shutting down metrics provider", "error", err)
 		}
+		m.cleanupAllMetricsInstances()
 	})
+	if mr.systemProvider != nil {
+		if err := mr.systemProvider.Shutdown(shutdownCtx); err != nil {
+			mlog().Warn("error shutting down system metrics provider", "error", err)
+		}
+	}
+	waitWithin(shutdownCtx, &mr.evictions)
 
 	go func() {
 		// The context above is canceled when close returns, so bound this one separately.
-		exportCtx, cancel := mr.shutdownContext()
+		exportCtx, cancel := shutdownContext(mr.ctx)
 		defer cancel()
 		if err := mr.exporter.Shutdown(exportCtx); err != nil {
 			mlog().Warn("closing metrics provider", "error", err)
@@ -997,6 +1045,12 @@ func obiMeterOptions() []instrument.MeterOption {
 type sharedExporter struct{ sdkmetric.Exporter }
 
 func (sharedExporter) Shutdown(_ context.Context) error { return nil }
+
+func releaseExporterOnError(ctx context.Context, exporter sdkmetric.Exporter, err *error) {
+	if *err != nil {
+		_ = exporter.Shutdown(ctx)
+	}
+}
 
 // instrumentMetricsExporter checks whether the context is configured to report internal metrics and,
 // in this case, wraps the passed metrics exporter inside an instrumented exporter
@@ -1096,6 +1150,22 @@ func (mr *MetricsReporter) spanMetricAttributes() []attributes.Field[*request.Sp
 			attr.Source,
 			attr.TelemetrySDKLanguage,
 		})
+}
+
+type spanMetricExtraAttrs struct {
+	requests []attr.Name
+	sizes    []attr.Name
+	aliases  bool
+}
+
+func spanMetadataAttrs(span *request.Span, names []attr.Name, aliases bool) []attribute.KeyValue {
+	var kvs []attribute.KeyValue
+	for _, name := range names {
+		if key, v, ok := attributes.SpanMetadataValue(span.Service.Metadata, name, aliases); ok {
+			kvs = append(kvs, key.OTEL().String(v))
+		}
+	}
+	return kvs
 }
 
 func otelMetricsAccepted(span *request.Span) bool {
@@ -1407,15 +1477,9 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 	// together, so feeding one alone makes the pair disagree. Both stay out when the
 	// duration is withheld.
 	if measured && otelSpanMetricsAccepted(span) {
-		var extraAttrs []attribute.KeyValue
-
-		for _, l := range mr.spanExtraAttrs {
-			if v, ok := span.Service.Metadata[l]; ok {
-				extraAttrs = append(extraAttrs, l.OTEL().String(v))
-			}
-		}
-
 		if span.Service.Features.SpanMetrics() {
+			extraAttrs := spanMetadataAttrs(span, mr.spanExtraAttrs.requests, mr.spanExtraAttrs.aliases)
+
 			sml, attrs := r.spanMetricsLatency.ForRecord(span, extraAttrs...)
 			sml.Record(ctx, duration, instrument.WithAttributeSet(attrs))
 
@@ -1424,6 +1488,8 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 		}
 
 		if span.Service.Features.SpanSizes() {
+			extraAttrs := spanMetadataAttrs(span, mr.spanExtraAttrs.sizes, mr.spanExtraAttrs.aliases)
+
 			smst, attrs := r.spanMetricsRequestSizeTotal.ForRecord(span, extraAttrs...)
 			smst.Add(ctx, float64(span.RequestBodyLength()), instrument.WithAttributeSet(attrs))
 
@@ -1434,6 +1500,10 @@ func (r *Metrics) record(span *request.Span, mr *MetricsReporter) {
 }
 
 func (mr *MetricsReporter) createTargetInfo(attrs *attribute.Set) {
+	if mr.targetInfo == nil {
+		return
+	}
+
 	mlog().Debug("Creating target.info")
 
 	attrOpt := instrument.WithAttributeSet(*attrs)
@@ -1442,7 +1512,7 @@ func (mr *MetricsReporter) createTargetInfo(attrs *attribute.Set) {
 }
 
 func (mr *MetricsReporter) deleteTargetInfo(attrs *attribute.Set) {
-	if attrs == nil {
+	if attrs == nil || mr.targetInfo == nil {
 		return
 	}
 
@@ -1452,7 +1522,7 @@ func (mr *MetricsReporter) deleteTargetInfo(attrs *attribute.Set) {
 }
 
 func (mr *MetricsReporter) createTracesTargetInfo(svc *svc.Attrs, attrs *attribute.Set) {
-	if !svc.Features.AnySpanMetrics() {
+	if mr.tracesTargetInfo == nil || !svc.Features.AnySpanMetrics() {
 		return
 	}
 
@@ -1743,5 +1813,4 @@ func (r *Metrics) cleanupAllMetricsInstances() {
 	cleanupMetrics(r.ctx, r.genAIOutputTokenUsage)
 	cleanupMetrics(r.ctx, r.mcpClientOperationDuration)
 	cleanupMetrics(r.ctx, r.mcpServerOperationDuration)
-	// Provider shutdown performs the final collection of sessions closed above.
 }

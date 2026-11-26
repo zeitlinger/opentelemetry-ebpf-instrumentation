@@ -6,6 +6,8 @@ package prom
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -548,4 +550,101 @@ func TestBPFCollectorRegistersMapMetrics(t *testing.T) {
 		}
 		assert.Equal(t, mapLabels, labels, "%s labels", name)
 	}
+}
+
+func TestBPFCollectorExposesCumulativeProbeLatencyBuckets(t *testing.T) {
+	collector := newCollector(
+		&global.ContextInfo{Metrics: imetrics.NoopReporter{}},
+		&PrometheusConfig{},
+		&perapp.GlobalMetricsConfig{},
+		false,
+	)
+	t.Cleanup(collector.close)
+
+	program := &BPFProgram{}
+	scrapes := []struct {
+		latency float64
+		count   uint64
+	}{
+		{latency: 0.0000004, count: 10},
+		{latency: 0.000004, count: 20},
+	}
+	scrape := 0
+	collector.probeMetrics = func() []ProbeMetrics {
+		current := scrapes[scrape]
+		scrape++
+
+		program.runCount += current.count
+		program.runTime += time.Duration(current.latency * float64(current.count) * float64(time.Second))
+
+		return []ProbeMetrics{{
+			probeType: "Kprobe",
+			probeName: "obi_kprobe_tcp_connect",
+			probeID:   "7",
+			latency:   current.latency,
+			count:     current.count,
+			program:   program,
+		}}
+	}
+	collector.mapMetrics = func() []BpfMapMetrics { return nil }
+
+	registry := prometheus.NewPedanticRegistry()
+	require.NoError(t, registry.Register(collector))
+
+	var histogram *dto.Histogram
+	for range scrapes {
+		families, err := registry.Gather()
+		require.NoError(t, err)
+
+		histogram = nil
+		for _, family := range families {
+			if family.GetName() == "bpf_probe_latency_seconds" {
+				histogram = family.GetMetric()[0].GetHistogram()
+			}
+		}
+		require.NotNil(t, histogram)
+	}
+
+	assert.Equal(t, uint64(30), histogram.GetSampleCount())
+
+	buckets := map[float64]uint64{}
+	for _, bucket := range histogram.GetBucket() {
+		buckets[bucket.GetUpperBound()] = bucket.GetCumulativeCount()
+	}
+	require.Len(t, buckets, len(imetrics.BpfLatenciesBuckets), "every bound must be exposed")
+
+	var previous uint64
+	for _, bound := range imetrics.BpfLatenciesBuckets {
+		assert.GreaterOrEqual(t, buckets[bound], previous, "bucket le=%g must be cumulative", bound)
+		previous = buckets[bound]
+	}
+	assert.Equal(t, uint64(0), buckets[0.0000001])
+	assert.Equal(t, uint64(10), buckets[0.0000005])
+	assert.Equal(t, uint64(10), buckets[0.000002])
+	assert.Equal(t, uint64(30), buckets[0.000005])
+	assert.Equal(t, uint64(30), buckets[0.005])
+}
+
+func TestInternalProgramIDsComeFromFDInfo(t *testing.T) {
+	fdinfoDir := t.TempDir()
+	writeFDInfo(t, fdinfoDir, map[string]string{
+		"3": "pos:\t0\nflags:\t02000002\nprog_id:\t12\n",
+		"4": "pos:\t0\nflags:\t02000002\nmap_id:\t30\n",
+	})
+	collector := &BPFCollector{obiOnly: true, fdinfoDir: fdinfoDir, log: slog.Default()}
+
+	ids, complete := collector.programIDs()
+	assert.Equal(t, []ebpf.ProgramID{12}, ids)
+	assert.True(t, complete)
+
+	collector.fdinfoDir = filepath.Join(fdinfoDir, "missing")
+	ids, complete = collector.programIDs()
+	assert.Empty(t, ids)
+	assert.False(t, complete, "a failed listing must not evict cached programs")
+
+	collector.fdinfoDir = fdinfoDir
+	require.NoError(t, os.Mkdir(filepath.Join(fdinfoDir, "5"), 0o700))
+	ids, complete = collector.programIDs()
+	assert.Equal(t, []ebpf.ProgramID{12}, ids, "readable descriptors are still reported")
+	assert.False(t, complete, "an unreadable descriptor must not evict cached programs")
 }

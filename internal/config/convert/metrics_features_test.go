@@ -61,6 +61,24 @@ func TestV2ConnectionInfoFeatureRoundTrip(t *testing.T) {
 	require.True(t, roundTrip.Metrics.Features.ConnectionInfo())
 }
 
+func TestV2StatsTCPResetsFeatureRoundTrip(t *testing.T) {
+	const name = "stats_tcp_resets"
+	ext, err := schema.ParseReceiverYAML([]byte("version: '2.0'\nmetrics:\n  features: [" + name + "]\n"))
+	require.NoError(t, err)
+
+	got, err := V2ToRuntime(ext)
+	require.NoError(t, err)
+	require.True(t, got.Metrics.Features.StatsTCPResets())
+
+	_, doc := RuntimeToV2(got)
+	require.Equal(t, []string{name}, doc.Capture.Metrics.Features)
+	require.Equal(t, []string{"tcp_resets"}, doc.Capture.Network.Stats.Features)
+
+	roundTrip, err := V2ToRuntime(doc)
+	require.NoError(t, err)
+	require.True(t, roundTrip.Metrics.Features.StatsTCPResets())
+}
+
 func TestV2MetricFeaturesOverrideEnablement(t *testing.T) {
 	t.Parallel()
 
@@ -157,4 +175,47 @@ instrumentation:
 	got, err = V2ToRuntime(docExt)
 	require.NoError(t, err)
 	require.False(t, instrumentations.NewInstrumentationSelection(got.OTELMetrics.Instrumentations).HTTPEnabled())
+}
+
+func TestV2TargetInfo(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "omitted", body: "metrics:\n  features: [application]\n", want: true},
+		{name: "enabled", body: "metrics:\n  target_info:\n    enabled: true\n", want: true},
+		{name: "disabled", body: "metrics:\n  target_info:\n    enabled: false\n", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			receiver, err := schema.ParseReceiverYAML([]byte("version: '2.0'\n" + tc.body))
+			require.NoError(t, err)
+			got, err := V2ToRuntime(receiver)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, !got.Metrics.DisableTargetInfo)
+
+			doc, _ := RuntimeToV2(got)
+			data, err := yaml.Marshal(doc)
+			require.NoError(t, err)
+			parsed, ext, err := schema.ParseStandaloneYAML(data)
+			require.NoError(t, err)
+			require.NotNil(t, ext.Capture.Metrics.TargetInfo.Enabled)
+			require.Equal(t, tc.want, *ext.Capture.Metrics.TargetInfo.Enabled)
+			got, err = DocumentToRuntime(parsed)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, !got.Metrics.DisableTargetInfo)
+		})
+	}
+}
+
+func TestV2TargetInfoProgrammaticPartialKeepsDefault(t *testing.T) {
+	t.Parallel()
+
+	got, err := V2ToRuntime(&schema.Extension{Version: schema.SupportedVersion})
+	require.NoError(t, err)
+	require.False(t, got.Metrics.DisableTargetInfo)
 }

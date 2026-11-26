@@ -54,21 +54,26 @@ func TestMethod(t *testing.T) {
 	assert.Equal(t, "GET", httpMethodFromBuf(event.Buf[:]))
 }
 
-func TestHTTPRequestResponseToSpanSetsSchemeFromSSLFlag(t *testing.T) {
+func TestHTTPRequestResponseToSpanUsesHTTPOrHTTPSScheme(t *testing.T) {
 	testCases := []struct {
 		name           string
 		sslFlag        uint8
+		parsedScheme   string
 		expectedScheme string
 	}{
-		{name: "http", sslFlag: 0, expectedScheme: "http"},
-		{name: "https", sslFlag: 1, expectedScheme: "https"},
+		{name: "plaintext fallback", sslFlag: 0, expectedScheme: "http"},
+		{name: "TLS fallback", sslFlag: 1, expectedScheme: "https"},
+		{name: "parsed http overrides TLS", sslFlag: 1, parsedScheme: "http", expectedScheme: "http"},
+		{name: "parsed https overrides plaintext", sslFlag: 0, parsedScheme: "https", expectedScheme: "https"},
+		{name: "unexpected scheme uses plaintext fallback", sslFlag: 0, parsedScheme: "ftp", expectedScheme: "http"},
+		{name: "unexpected scheme uses TLS fallback", sslFlag: 1, parsedScheme: "ftp", expectedScheme: "https"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := &http.Request{
 				Method: http.MethodGet,
-				URL:    &url.URL{Path: "/test"},
+				URL:    &url.URL{Scheme: tc.parsedScheme, Path: "/test"},
 				Host:   "example.com",
 				Body:   io.NopCloser(strings.NewReader("")),
 			}
@@ -80,10 +85,13 @@ func TestHTTPRequestResponseToSpanSetsSchemeFromSSLFlag(t *testing.T) {
 				Type: uint8(request.EventTypeHTTP),
 				Ssl:  tc.sslFlag,
 			}
+			wantFullPath := req.URL.String()
 			span := httpRequestResponseToSpan(nil, event, req, resp)
 
 			expectedStatement := tc.expectedScheme + request.SchemeHostSeparator + req.Host
 			assert.Equal(t, expectedStatement, span.Statement)
+			assert.Equal(t, wantFullPath, span.FullPath)
+			assert.Equal(t, tc.parsedScheme, req.URL.Scheme)
 		})
 	}
 }
@@ -241,7 +249,7 @@ func TestToRequestTrace(t *testing.T) {
 		End:          789012,
 		HostPort:     1,
 		Service:      svc.Attrs{},
-		Statement:    "http;",
+		Statement:    "http;example.com",
 	}
 	assert.Equal(t, expected, result)
 }
@@ -357,6 +365,21 @@ func TestToRequestTrace_BadHost(t *testing.T) {
 	s, p = httpHostFromBuf(record3.Buf[:])
 	assert.Empty(t, s)
 	assert.Equal(t, -1, p)
+}
+
+func TestHTTPInfoEventToSpan_XForwardedHostNotMatched(t *testing.T) {
+	// X-Forwarded-Host must not be mistaken for Host when it appears first.
+	event := BPFHTTPInfo{Type: uint8(request.EventTypeHTTP)}
+	event.ConnInfo.S_port = 54321
+	event.ConnInfo.D_port = 8080
+	event.ConnInfo.S_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 0, 1}
+	event.ConnInfo.D_addr = [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 10, 0, 0, 1}
+	copy(event.Buf[:], "GET /path HTTP/1.1\r\nX-Forwarded-Host: proxy.example.com\r\nHost: backend.example.com\r\n\r\n")
+
+	span, ignored, err := HTTPInfoEventToSpan(nil, &event)
+	require.NoError(t, err)
+	assert.False(t, ignored)
+	assert.Equal(t, "http;backend.example.com", span.Statement)
 }
 
 func TestHTTPInfoEventToSpan_HostHeaderCase(t *testing.T) {

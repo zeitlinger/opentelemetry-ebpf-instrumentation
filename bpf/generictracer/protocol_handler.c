@@ -23,18 +23,42 @@
 
 #include <logger/bpf_dbg.h>
 
-// k_tail_handle_buf_with_args
-SEC("kprobe")
-int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
+// The bpf_loop scan follows a request's headers across its buffers. Where it
+// runs, it replaces looking for a traceparent at the start of each buffer.
+static __always_inline bool http1_header_scan_enabled(const call_protocol_args_t *args,
+                                                      bool use_bpf_loop) {
+    return use_bpf_loop && g_bpf_loop_enabled && g_bpf_traceparent_enabled &&
+           capture_header_buffer && args->protocols.http;
+}
+
+static __always_inline int handle_buf_with_args(void *ctx, bool use_bpf_loop) {
     call_protocol_args_t *args = protocol_args();
     if (!args) {
         return 0;
+    }
+
+    if (http1_header_scan_enabled(args, use_bpf_loop)) {
+        http1_header_scan_t *scan = bpf_map_lookup_elem(&http1_header_scans, &args->pid_conn);
+        http_info_t *info = scan ? bpf_map_lookup_elem(&ongoing_http, &args->pid_conn) : NULL;
+        if (info && !info->submitted && still_reading(info) &&
+            !http_response_direction(info, args->direction) && info->ssl == args->ssl) {
+            if (continue_http1_header_scan(args, scan)) {
+                // Adopting it runs in its own program, so the verifier explores it
+                // apart from the header scan.
+                preempt_guarded_tail_call_static(ctx, &jump_table, k_tail_protocol_http_inherit_tp);
+                bpf_d_printk("tailcall failed [%s]", __FUNCTION__);
+                bpf_map_delete_elem(&http1_header_scans, &args->pid_conn);
+            }
+            return append_http1_request_buffer(ctx, args, info);
+        }
     }
 
     bpf_dbg_printk("=== kprobe buf=[%s], pid=%d, len=%d ===",
                    args->small_buf,
                    args->pid_conn.pid,
                    args->bytes_len);
+
+    job_fetch_see_buffer(&args->pid_conn, args->lw_thread);
 
     if (args->protocols.http && is_http(args->small_buf, MIN_HTTP_SIZE, &args->packet_type)) {
         preempt_guarded_tail_call(ctx, &jump_table, k_tail_protocol_http);
@@ -67,7 +91,7 @@ int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
         if (!args->protocols.http2) {
             return 0;
         }
-        preempt_guarded_tail_call(ctx, &jump_table, k_tail_protocol_http2);
+        start_http2_frames(ctx, args);
     } else if (args->protocols.tcp && is_mysql(&args->pid_conn.conn,
                                                (const unsigned char *)args->u_buf,
                                                args->bytes_len,
@@ -108,7 +132,7 @@ int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
     } else { // large request tracking and generic TCP
         http_info_t *info = bpf_map_lookup_elem(&ongoing_http, &args->pid_conn);
 
-        bpf_d_printk("http info %llx, submitted %d, still reading %d",
+        bpf_d_printk("http_info=%llx, submitted=%d, still_reading=%d",
                      info,
                      (info) ? info->submitted : 0,
                      (info) ? still_reading(info) : 0);
@@ -133,7 +157,8 @@ int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
                 // scan for the incoming 'Traceparent' header. If they are not reassembled
                 // we'll see something like this:
                 // [before the injected header],[70 bytes for 'Traceparent...'],[the rest].
-                if (reading && is_traceparent(args->small_buf)) {
+                if (reading && !http1_header_scan_enabled(args, use_bpf_loop) &&
+                    is_traceparent(args->small_buf)) {
                     unsigned char *buf = (unsigned char *)tp_char_buf_mem();
                     if (buf) {
                         bpf_probe_read(buf, TP_SIZE, (unsigned char *)args->u_buf);
@@ -182,7 +207,7 @@ int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
                     info->len += args->bytes_len;
                 } else if (responding) {
                     info->end_monotime_ns = bpf_ktime_get_ns();
-                    bpf_d_printk("bytes len %d, new bytes %d", info->resp_len, args->bytes_len);
+                    bpf_d_printk("bytes_len=%d, new_bytes=%d", info->resp_len, args->bytes_len);
                     info->resp_len += args->bytes_len;
                 }
 
@@ -203,4 +228,16 @@ int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
     }
 
     return 0;
+}
+
+// k_tail_handle_buf_with_args
+SEC("kprobe")
+int GUARDED_PROG(obi_handle_buf_with_args, void *, ctx) {
+    return handle_buf_with_args(ctx, true);
+}
+
+// k_tail_handle_buf_with_args but for kernels < 5.17
+SEC("kprobe")
+int GUARDED_PROG(obi_handle_buf_with_args_legacy, void *, ctx) {
+    return handle_buf_with_args(ctx, false);
 }

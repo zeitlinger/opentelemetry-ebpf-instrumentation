@@ -7,13 +7,14 @@
 #include <bpfcore/bpf_helpers.h>
 
 #include <common/connection_info.h>
+#include <common/http2_conn_info_data.h>
 #include <common/map_sizing.h>
-
-#include <generictracer/types/http2_conn_info_data.h>
+#include <common/pin_internal.h>
 
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, pid_connection_info_t);
     __type(value, http2_conn_info_data_t); // flags and id
     __uint(max_entries, MAX_CONCURRENT_REQUESTS);
+    __uint(pinning, OBI_PIN_INTERNAL);
 } ongoing_http2_connections SEC(".maps");

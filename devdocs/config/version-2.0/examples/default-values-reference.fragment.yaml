@@ -75,6 +75,11 @@ extensions:
     capture:
       exceptions:
         enabled: false
+        go:
+          panics: true
+          formatted_errors: false
+        python:
+          enabled: true
       # policy controls global rule evaluation behavior.
       policy:
         # Include by default unless matched by an exclude rule.
@@ -203,6 +208,16 @@ extensions:
         #           patterns:
         #             - /checkout/{id}
         #           unmatched: wildcard
+        #
+        # - action: include
+        #   name: job-workers
+        #   description: Keep each call of a job the workers take off Redis in a trace of its own.
+        #   match:
+        #     kubernetes:
+        #       namespace_glob:
+        #         - jobs
+        #   refine:
+        #     group_job_spans: false
 
       instrumentation:
         # HTTP protocol instrumentation and HTTP-specific enrichment/parsing.
@@ -212,6 +227,7 @@ extensions:
             metrics: true
             # Set to false to keep the RED metrics without the size histograms.
             body_size_metrics: true
+            request_phase_spans: true
           # The target adapter imports one shared application filter. Every
           # application protocol's trace and metric maps must equal this trace
           # map.
@@ -236,6 +252,50 @@ extensions:
           request_timeout: 0s
           # Internal parser/capture buffer size (0 uses default behavior).
           buffer_size: 0
+          query_parameters:
+            # Complete selection; an explicit list replaces these defaults.
+            # Omit names or use null to retain defaults; names: [] selects no keys.
+            redaction:
+              replacement: REDACTED
+              names:
+                - X-Amz-Signature
+                - X-Amz-Credential
+                - X-Amz-Security-Token
+                - AWSAccessKeyId
+                - Signature
+                - SecurityToken
+                - X-Goog-Signature
+                - sig
+                - token
+                - access_token
+                - refresh_token
+                - id_token
+                - jwt
+                - session
+                - sid
+                - signature
+                - api_key
+                - apikey
+                - client_secret
+                - secret
+                - password
+                - pass
+                - pwd
+                - reset_token
+                - invite_token
+                - verify_token
+                - otp
+                - totp
+                - mfa_code
+                - verification_code
+                - SAMLResponse
+                - assertion
+                - card
+                - cc
+                - pan
+                - cvv
+                - ssn
+                - tax_id
           # HTTP route normalization and low-cardinality route naming controls.
           routes:
             # Policy for requests handled by an instrumented workload.
@@ -272,10 +332,11 @@ extensions:
           # HTTP payload-level extraction features.
           payload_extraction:
             # List-based enablement, consistent with other instrumentation selectors.
-            # Supported values today: graphql, elasticsearch, aws, sqlpp,
+            # Supported values today: graphql, elasticsearch, aws_s3, aws_sqs, aws_sns, sqlpp,
             # openai, anthropic, gemini, qwen, bedrock, mcp, embedding,
             # rerank, retrieval, ollama, cohere, openai_compatible, jsonrpc,
             # enrichment.
+            # Group aliases: genai, database, aws, all, "*" (all and "*" exclude enrichment).
             enabled: []
             sqlpp:
               endpoint_patterns:
@@ -298,6 +359,9 @@ extensions:
           filters:
             traces: {}
             metrics: {}
+        # Settings shared by all database protocols.
+        db:
+          sanitize_query_text: false
         # SQL protocol instrumentation and driver-specific tuning.
         sql:
           enabled:
@@ -307,7 +371,6 @@ extensions:
             traces: {}
             metrics: {}
           heuristic_detect: false
-          sanitize_query_text: false
           mysql:
             buffer_size: 0
             prepared_statements_cache_size: 1024
@@ -387,6 +450,8 @@ extensions:
         # to generic network-only instrumentation.
         go:
           enabled: true
+          # Link spans across goroutines through Go channels.
+          channel_links: true
           # Reserved; keep empty.
           filter: {}
         # Node.js runtime instrumentation allows Node.js services to be instrumented via
@@ -489,7 +554,7 @@ extensions:
         stats:
           # Master switch for TCP stats observability.
           enabled: false
-          # Supported values: tcp_rtt, tcp_failed_connections, tcp_successful_connections, tcp_retransmits, tcp_io.
+          # Supported values: tcp_rtt, tcp_failed_connections, tcp_successful_connections, tcp_retransmits, tcp_io, tcp_resets.
           features: []
           endpoint_identity:
             agent_ip: ""
@@ -537,6 +602,8 @@ extensions:
           wakeup_len: 500
           batch_length: 100
           batch_timeout: 1s
+          stats:
+            wakeup_bytes: 4096
         propagation:
           context_propagation: disabled
           override_bpfloop_enabled: false
@@ -565,6 +632,9 @@ extensions:
 
       metrics:
         features: [application]
+        # Export the target.info and traces.target.info metrics.
+        target_info:
+          enabled: true
 
       # telemetry tunes reporter caches and metric TTLs for OBI capture internals.
       telemetry:
@@ -603,7 +673,17 @@ extensions:
             source_labels:
               service_name: ""
               service_namespace: ""
+            # Setting ca_file turns on TLS to the k8s-cache; cert_file and key_file are only for mutual TLS.
+            tls:
+              ca_file: ""
+              cert_file: ""
+              key_file: ""
+              # Overrides the host from address when checking the k8s-cache certificate.
+              server_name: ""
         cloud:
+          # Set to false to skip cloud metadata detection at startup.
+          detection:
+            enabled: true
           # Overrides automatic cloud cluster and region detection.
           cluster_name: ""
           region: ""
@@ -615,6 +695,7 @@ extensions:
             hosted_zone_ids: []
         peer_metadata:
           enabled: false
+          mode: peer
           listen_address: ""
           port: 8998
           peer_cidrs: []
@@ -634,6 +715,8 @@ extensions:
             key_file: ""
             ca_file: ""
             server_name: ""
+          central:
+            address: ""
       # Service identity enrichment policy from configured enrichers.
       service_name:
         # Ordered backends used for peer and host name resolution.

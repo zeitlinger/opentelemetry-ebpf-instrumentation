@@ -32,6 +32,7 @@ const internalMetricsMeterName = "obi_internal"
 // InternalMetricsReporter is an internal metrics Reporter that exports to OTEL
 type InternalMetricsReporter struct {
 	ctx                              context.Context
+	provider                         *metric.MeterProvider
 	tracerFlushes                    instrument.Float64Histogram
 	otelMetricExports                instrument.Float64Counter
 	otelMetricExportErrs             instrument.Float64Counter
@@ -64,7 +65,7 @@ func imlog() *slog.Logger {
 	return slog.With("component", "otel.InternalMetricsReporter")
 }
 
-func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo, metrics *otelcfg.MetricsConfig, internalMetrics *imetrics.InternalMetricsConfig) (*InternalMetricsReporter, error) {
+func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo, metrics *otelcfg.MetricsConfig, internalMetrics *imetrics.InternalMetricsConfig) (_ *InternalMetricsReporter, retErr error) {
 	log := imlog()
 	log.Debug("instantiating internal metrics exporter provider")
 	exporter, err := ctxInfo.OTELMetricsExporter.Instantiate(ctx)
@@ -72,20 +73,39 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 		log.Error("can't instantiate metrics exporter", "error", err)
 		return nil, err
 	}
-
-	internalNames := attributes.NewInternalMetrics(attr.VendorPrefix)
-	internalAttrs := attr.NewInternalAttributes(attr.VendorPrefix)
+	defer releaseExporterOnError(ctx, exporter, &retErr)
 
 	res := newResourceInternal(&ctxInfo.NodeMeta)
 	bpfProbeLatency := newBpfProbeLatencyProducer(
-		internalNames.BpfProbeLatency,
+		attributes.NewInternalMetrics(attr.VendorPrefix).BpfProbeLatency,
 		exporter.Temporality(metric.InstrumentKindHistogram),
 	)
 	provider := newInternalMeterProvider(res, &exporter, metrics.Interval, bpfProbeLatency)
-	meter := provider.Meter(internalMetricsMeterName,
-		instrument.WithInstrumentationVersion(attr.TelemetryDistroVersion()),
-		instrument.WithSchemaURL(attr.OBISchemaURL),
-	)
+	reporter, err := newInternalMetricsReporter(ctx, provider, bpfProbeLatency, internalMetrics)
+	if err != nil {
+		return nil, err
+	}
+
+	reporter.provider = provider
+	return reporter, nil
+}
+
+// NewInternalMetricsReporterWithProvider reports the internal metrics through a MeterProvider
+// owned by the caller, such as the Collector service telemetry.
+func NewInternalMetricsReporterWithProvider(ctx context.Context, provider instrument.MeterProvider, internalMetrics *imetrics.InternalMetricsConfig) (*InternalMetricsReporter, error) {
+	return newInternalMetricsReporter(ctx, provider, nil, internalMetrics)
+}
+
+func newInternalMetricsReporter(
+	ctx context.Context,
+	provider instrument.MeterProvider,
+	bpfProbeLatency *bpfProbeLatencyProducer,
+	internalMetrics *imetrics.InternalMetricsConfig,
+) (*InternalMetricsReporter, error) {
+	internalNames := attributes.NewInternalMetrics(attr.VendorPrefix)
+	internalAttrs := attr.NewInternalAttributes(attr.VendorPrefix)
+
+	meter := internalMeter(provider, internalMetrics.MeterAttributes)
 	tracerFlushes, err := meter.Float64Histogram(
 		internalNames.TracerFlushes.OTEL,
 		instrument.WithDescription("Length of the groups of traces flushed from the eBPF tracer to the next pipeline stage"),
@@ -260,6 +280,14 @@ func NewInternalMetricsReporter(ctx context.Context, ctxInfo *global.ContextInfo
 	}, nil
 }
 
+func internalMeter(provider instrument.MeterProvider, attrs attribute.Set) instrument.Meter {
+	return provider.Meter(internalMetricsMeterName,
+		instrument.WithInstrumentationVersion(attr.TelemetryDistroVersion()),
+		instrument.WithSchemaURL(attr.OBISchemaURL),
+		instrument.WithInstrumentationAttributeSet(attrs),
+	)
+}
+
 func newInternalMeterProvider(
 	res *resource.Resource,
 	exporter *metric.Exporter,
@@ -295,6 +323,15 @@ func (p *InternalMetricsReporter) Start(ctx context.Context) {
 		attribute.String(string(p.internalAttrs.Version), buildinfo.Version),
 		attribute.String(string(p.internalAttrs.Revision), buildinfo.Revision),
 	))
+}
+
+// Shutdown releases the provider that OBI created. A provider passed by the caller, such as the
+// Collector service telemetry, is left for the caller to shut down.
+func (p *InternalMetricsReporter) Shutdown(ctx context.Context) error {
+	if p.provider == nil {
+		return nil
+	}
+	return p.provider.Shutdown(ctx)
 }
 
 func (p *InternalMetricsReporter) TracerFlush(length int) {
@@ -385,6 +422,11 @@ func (p *InternalMetricsReporter) AvoidInstrumentationTraces(serviceName, servic
 }
 
 func (p *InternalMetricsReporter) BpfProbeStats(probeID, probeType, probeName string, count uint64, latencySumSeconds float64, latencyBuckets map[float64]uint64) {
+	// A Producer can only be attached to an SDK reader, so a caller-owned provider has no probe
+	// latency histogram.
+	if p.bpfProbeLatency == nil {
+		return
+	}
 	p.bpfProbeLatency.Update(probeID, probeType, probeName, count, latencySumSeconds, latencyBuckets)
 }
 

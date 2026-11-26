@@ -48,7 +48,7 @@ jobs:
 
       - uses: $/.github/actions/generate-bpf
         with:
-          cache-key-prefix: go-build-k8s-integration-race
+          artifact-name: k8s-bpf-generated-${{ github.run_id }}
 
   test-matrix:
     name: "Build matrix"
@@ -82,7 +82,7 @@ jobs:
       - name: Download generated BPF files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: bpf-generated-${{ github.run_id }}
+          name: k8s-bpf-generated-${{ github.run_id }}
 
       - name: Build and save shared test images
         run: |
@@ -153,7 +153,7 @@ jobs:
       - name: Download generated BPF files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: bpf-generated-${{ github.run_id }}
+          name: k8s-bpf-generated-${{ github.run_id }}
 
       - name: Upstream semconv registry cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 # zizmor: ignore[cache-poisoning] pinned upstream semconv tarball, keyed on the version in schemas/obi/manifest.yaml

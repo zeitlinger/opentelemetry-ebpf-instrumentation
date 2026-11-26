@@ -406,6 +406,9 @@ func mustMapStatsFeatureDefaults(ex map[string]any) error {
 	if features.StatsTCPIo() {
 		want = append(want, "tcp_io")
 	}
+	if features.StatsTCPResets() {
+		want = append(want, "tcp_resets")
+	}
 
 	got := toStringSlice(featuresValue)
 	if !sameStringSet(got, want) {
@@ -498,6 +501,7 @@ func parityChecks() []parityCheck {
 		{[]string{"ebpf", "batch_length"}, []string{"obi", "capture", "engine", "batching", "batch_length"}},
 		{[]string{"ebpf", "batch_timeout"}, []string{"obi", "capture", "engine", "batching", "batch_timeout"}},
 		{[]string{"ebpf", "wakeup_len"}, []string{"obi", "capture", "engine", "batching", "wakeup_len"}},
+		{[]string{"ebpf", "stats_wakeup_data_bytes"}, []string{"obi", "capture", "engine", "batching", "stats", "wakeup_bytes"}},
 		{[]string{"ebpf", "traffic_control_backend"}, []string{"obi", "capture", "engine", "traffic", "control_backend"}},
 		{[]string{"ebpf", "bpf_fs_path"}, []string{"obi", "capture", "engine", "bpf_filesystem", "path"}},
 		{[]string{"ebpf", "max_transaction_time"}, []string{"obi", "capture", "engine", "transactions", "max_duration"}},
@@ -593,7 +597,6 @@ func parityChecks() []parityCheck {
 		{[]string{"otel_metrics_export", "histogram_aggregation"}, []string{"meter_provider", "readers", "0", "periodic", "exporter", "otlp_grpc", "default_histogram_aggregation"}},
 		{[]string{"otel_metrics_export", "reporters_cache_len"}, []string{"obi", "capture", "telemetry", "metrics", "reporters_cache_len"}},
 		{[]string{"otel_metrics_export", "ttl"}, []string{"obi", "capture", "telemetry", "metrics", "ttl"}},
-		{[]string{"otel_metrics_export", "extra_span_resource_attributes"}, []string{"obi", "daemon", "telemetry", "metrics", "prometheus", "extra_span_resource_attributes"}},
 
 		{[]string{"otel_traces_export", "queue_size"}, []string{"tracer_provider", "processors", "0", "batch", "max_queue_size"}},
 		{[]string{"otel_traces_export", "batch_max_size"}, []string{"tracer_provider", "processors", "0", "batch", "max_export_batch_size"}},
@@ -603,7 +606,6 @@ func parityChecks() []parityCheck {
 		{[]string{"prometheus_export", "service_cache_size"}, []string{"obi", "daemon", "telemetry", "metrics", "prometheus", "span_metrics_service_cache_size"}},
 		{[]string{"prometheus_export", "allow_service_graph_self_references"}, []string{"obi", "daemon", "telemetry", "metrics", "prometheus", "allow_service_graph_self_references"}},
 		{[]string{"prometheus_export", "extra_resource_attributes"}, []string{"obi", "daemon", "telemetry", "metrics", "prometheus", "extra_resource_attributes"}},
-		{[]string{"prometheus_export", "extra_span_resource_attributes"}, []string{"obi", "daemon", "telemetry", "metrics", "prometheus", "extra_span_resource_attributes"}},
 
 		{[]string{"log_config"}, []string{"obi", "daemon", "logging", "config_format"}},
 		{[]string{"log_format"}, []string{"obi", "daemon", "logging", "format"}},
@@ -684,8 +686,16 @@ func verifyDefaults(cur map[string]any, ex map[string]any) ([]error, int) {
 	}
 	derivedChecks++
 
-	for _, extractor := range []string{"graphql", "elasticsearch", "aws", "sqlpp", "jsonrpc", "enrichment"} {
+	for _, extractor := range []string{"graphql", "elasticsearch", "sqlpp", "jsonrpc", "enrichment"} {
 		if err := mustMapPayloadExtractionMembership(cur, ex, extractor); err != nil {
+			failures = append(failures, err)
+		}
+		derivedChecks++
+	}
+
+	for _, extractor := range []string{"aws_s3", "aws_sqs", "aws_sns"} {
+		if err := mustMapPayloadExtractionMembershipAt(cur, ex,
+			[]string{"ebpf", "payload_extraction", "http", "aws", "enabled"}, extractor); err != nil {
 			failures = append(failures, err)
 		}
 		derivedChecks++

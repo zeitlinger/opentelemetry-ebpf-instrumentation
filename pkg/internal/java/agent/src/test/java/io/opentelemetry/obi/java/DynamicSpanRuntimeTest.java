@@ -136,6 +136,42 @@ class DynamicSpanRuntimeTest {
   }
 
   @Test
+  void replacesAndClearsDefinitionsWithoutDiscardingInflightSpans() throws Exception {
+    List<byte[]> payloads = new ArrayList<>();
+    DynamicSpanRuntime.setEmitterForTest(payloads::add);
+    Instrumentation instrumentation = ByteBuddyAgent.install();
+    DynamicSpanDefinition original =
+        new DynamicSpanDefinition("original", "com.example.DynamicSpanFixture#run()");
+    DynamicSpanDefinition replacement =
+        new DynamicSpanDefinition("replacement", "com.example.DynamicSpanFixture#run()");
+    Method run = DynamicSpanFixture.class.getDeclaredMethod("run");
+
+    DynamicSpanRuntime.configure(Arrays.asList(original), instrumentation);
+    DynamicSpanRuntime.SpanState[] inflight = DynamicSpanRuntime.enter(run);
+    assertNotNull(inflight);
+
+    DynamicSpanRuntime.configure(Arrays.asList(replacement), instrumentation);
+    DynamicSpanRuntime.SpanState[] replaced = DynamicSpanRuntime.enter(run);
+    assertNotNull(replaced);
+    assertEquals(1, replaced.length);
+
+    DynamicSpanRuntime.configure(Arrays.asList(replacement), instrumentation);
+    DynamicSpanRuntime.SpanState[] reapplied = DynamicSpanRuntime.enter(run);
+    assertNotNull(reapplied);
+    assertEquals(1, reapplied.length);
+
+    DynamicSpanRuntime.configure(new ArrayList<>(), instrumentation);
+    assertNull(DynamicSpanRuntime.enter(run));
+    DynamicSpanRuntime.exit(inflight, null);
+    DynamicSpanRuntime.exit(replaced, null);
+    DynamicSpanRuntime.exit(reapplied, null);
+    assertEquals(3, payloads.size());
+    assertTrue(new String(payloads.get(0), StandardCharsets.UTF_8).contains("original"));
+    assertTrue(new String(payloads.get(1), StandardCharsets.UTF_8).contains("replacement"));
+    assertTrue(new String(payloads.get(2), StandardCharsets.UTF_8).contains("replacement"));
+  }
+
+  @Test
   void reevaluatesWhenDuplicateClassLoaderDefinitionUnloads() throws Exception {
     Class<?> duplicate =
         new DuplicateFixtureLoader()

@@ -6,8 +6,15 @@ Experimental dynamic span declarations are configured per capture rule under
 `capture.rules[].refine.spans/development`. A non-empty list on an include
 rule opts in. An omitted or empty list leaves dynamic spans off. This experimental
 setting keeps each declaration alongside the workload selection it refines.
-This is startup-only. Any configuration refresh while experimental spans are
-configured in either the current or next configuration requires restarting OBI.
+For supported, compatible Java and Node.js agents already running under OBI,
+refreshing the configuration file can add, replace, or clear dynamic span rules
+without restarting OBI or the workload. An omitted or empty list clears the
+dynamic span rules for that workload. A refresh does not undo completed spans or
+change spans already in flight. It does not guarantee that unsupported or
+incompatible resident agents can be updated, or that every function reference
+can be wrapped. Check runtime diagnostics for resolution results. The Collector
+continues to use its startup configuration. This file refresh does not add a
+Collector configuration refresh mechanism.
 A span has a name, exactly one target under
 `on`, and optional `attributes` mappings. The schema reserves the target keys
 `function`, `function_noret`, `usdt`, and `usdt_noret`. Currently, the Java and

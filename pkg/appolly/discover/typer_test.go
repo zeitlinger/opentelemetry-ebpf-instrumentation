@@ -27,7 +27,6 @@ import (
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/otel/otelcfg"
 	"go.opentelemetry.io/obi/pkg/export/otel/perapp"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -174,18 +173,15 @@ func TestMatchedSelectorsCarryDynamicSpansToProcessState(t *testing.T) {
 	t.Parallel()
 
 	spans := []dynamicspan.Span{{Name: "checkout.place_order", FunctionReference: "**/checkout.js:exports.placeOrder"}}
-	selected := &services.GlobAttributes{Path: services.NewGlob("/srv/checkout")}
-	unselected := &services.GlobAttributes{Path: services.NewGlob("/srv/other")}
-	dynamicspan.RegisterSelector(selected, spans)
-
-	matched := selectedDynamicSpans([]services.Selector{selected})
-	require.Equal(t, spans, matched)
-	require.Empty(t, selectedDynamicSpans([]services.Selector{unselected}))
-
-	file := exec.New(exec.Init{Pid: 1234})
-	dynamicspanstate.Set(file, matched)
-	assert.Equal(t, spans, dynamicspanstate.ForFile(file))
-	assert.Empty(t, dynamicspanstate.ForFile(exec.New(exec.Init{Pid: 1234})))
+	handoff := newDynamicSpanHandoff()
+	match := &ProcessMatch{}
+	handoff.putMatch(match, spans, false, false)
+	got, ok := handoff.takeMatch(match)
+	require.True(t, ok)
+	assert.Equal(t, spans, got.spans)
+	assert.False(t, got.update)
+	_, ok = handoff.takeMatch(match)
+	assert.False(t, ok)
 }
 
 func TestMakeServiceAttrsUsesGlobalServiceIdentityWithDiscoveryRules(t *testing.T) {

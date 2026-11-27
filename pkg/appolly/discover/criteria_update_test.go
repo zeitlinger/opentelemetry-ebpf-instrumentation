@@ -186,6 +186,98 @@ func TestCriteriaRefreshUpdatesSamplers(t *testing.T) {
 	assert.Equal(t, services.SamplerAlwaysOff, updater.Updates().Sampler().Name)
 }
 
+func TestCriteriaRefreshUpdatesDynamicSpansIndependentlyOfSampler(t *testing.T) {
+	initial := criteriaConfig(t, "    - exe_path: /srv/app\n")
+	criteria := FindingCriteria(initial)
+	proc := &services.ProcessInfo{Pid: 10, ExePath: "/srv/app"}
+	handoff := newDynamicSpanHandoff()
+	output := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(10))
+	events := output.Subscribe()
+	matcher := &Matcher{
+		Log: slog.Default(), Criteria: criteria,
+		ProcessHistory: map[app.PID]ProcessMatch{
+			10: {Criteria: criteria, Process: proc, SamplerConfig: &initial.Traces.SamplerConfig},
+		},
+		observed: map[app.PID]observedProcess{
+			10: {attrs: ProcessAttrs{pid: 10}, process: proc, confirmedCriteria: criteria},
+		},
+		Output: output,
+		dynamicSpans: spansBySelector(criteria, dynamicspan.RulePlan{Glob: [][]dynamicspan.Span{{
+			{Name: "first", FunctionReference: "com.example.Foo#first"},
+		}}}, false),
+		spanHandoff:   handoff,
+		samplerConfig: &initial.Traces.SamplerConfig,
+	}
+
+	refresh := func(plan dynamicspan.RulePlan, sampler services.SamplerName) []Event[ProcessMatch] {
+		t.Helper()
+		cfg := criteriaConfig(t, "    - exe_path: /srv/app\n")
+		cfg.Traces.SamplerConfig = services.SamplerConfig{Name: sampler}
+		ctx := dynamicspan.WithRulePlan(t.Context(), plan)
+		err := matcher.refresh(ctx, services.CriteriaUpdate{
+			Context: ctx, Include: FindingCriteria(cfg), Exclude: ExcludingCriteria(cfg),
+			SamplerConfig: &cfg.Traces.SamplerConfig,
+		})
+		require.NoError(t, err)
+		select {
+		case got := <-events:
+			return got
+		default:
+			return nil
+		}
+	}
+
+	second := dynamicspan.RulePlan{Glob: [][]dynamicspan.Span{{
+		{Name: "second", FunctionReference: "com.example.Foo#second"},
+	}}}
+	updated := refresh(second, initial.Traces.SamplerConfig.Name)
+	require.Len(t, updated, 1)
+	require.Equal(t, EventUpdated, updated[0].Type)
+	target, ok := handoff.takeMatch(&updated[0].Obj)
+	require.True(t, ok)
+	assert.True(t, target.update)
+	assert.False(t, target.samplerUpdate)
+	assert.Equal(t, second.Glob[0], target.spans)
+
+	assert.Empty(t, refresh(second, initial.Traces.SamplerConfig.Name), "repeating the same desired spans must be a no-op")
+
+	cleared := refresh(dynamicspan.RulePlan{}, initial.Traces.SamplerConfig.Name)
+	require.Len(t, cleared, 1)
+	target, ok = handoff.takeMatch(&cleared[0].Obj)
+	require.True(t, ok)
+	assert.True(t, target.update)
+	assert.Empty(t, target.spans, "an empty update is an authoritative clear")
+
+	samplerOnly := refresh(dynamicspan.RulePlan{}, services.SamplerAlwaysOff)
+	require.Len(t, samplerOnly, 1)
+	_, ok = handoff.takeMatch(&samplerOnly[0].Obj)
+	assert.False(t, ok, "sampler-only refreshes must not masquerade as span updates")
+
+	combinedPlan := dynamicspan.RulePlan{Glob: [][]dynamicspan.Span{{
+		{Name: "third", FunctionReference: "com.example.Foo#third"},
+	}}}
+	combined := refresh(combinedPlan, services.SamplerAlwaysOn)
+	require.Len(t, combined, 1)
+	target, ok = handoff.takeMatch(&combined[0].Obj)
+	require.True(t, ok)
+	assert.True(t, target.update)
+	assert.True(t, target.samplerUpdate)
+
+	deselectCfg := criteriaConfig(t, "    - exe_path: /srv/other\n")
+	deselectCtx := dynamicspan.WithRulePlan(t.Context(), dynamicspan.RulePlan{})
+	require.NoError(t, matcher.refresh(deselectCtx, services.CriteriaUpdate{
+		Context: deselectCtx, Include: FindingCriteria(deselectCfg), Exclude: ExcludingCriteria(deselectCfg),
+		SamplerConfig: &deselectCfg.Traces.SamplerConfig,
+	}))
+	deselected := <-events
+	require.Len(t, deselected, 1)
+	assert.Equal(t, EventDeleted, deselected[0].Type)
+	target, ok = handoff.takeMatch(&deselected[0].Obj)
+	require.True(t, ok)
+	assert.True(t, target.update)
+	assert.Empty(t, target.spans, "deselection must clear spans before instrumentation is detached")
+}
+
 func TestCriteriaUpdaterPreservesExportCallbacks(t *testing.T) {
 	for _, signals := range []struct {
 		name    string
@@ -733,15 +825,10 @@ func TestCriteriaRefreshReportsStableConflictingPID(t *testing.T) {
 	require.Contains(t, matcher.ProcessHistory, app.PID(1))
 }
 
-func TestCompatibleDefinitionsRejectsRefreshWhenDynamicSpansAreConfigured(t *testing.T) {
-	spans := []dynamicspan.Span{{Name: "selected", FunctionReference: "com.example.Foo#bar"}}
+func TestCompatibleDefinitionsAllowsDynamicSpanRuleChanges(t *testing.T) {
 	current := &services.GlobAttributes{Path: services.NewGlob("/srv/app")}
 	next := &services.GlobAttributes{Path: services.NewGlob("/srv/app")}
-	dynamicspan.RegisterSelector(current, spans)
-	dynamicspan.RegisterSelector(next, spans)
-
-	err := compatibleDefinitions([]services.Selector{current}, []services.Selector{next})
-	require.EqualError(t, err, "configuration with dynamic spans cannot be refreshed; restart OBI to apply it")
+	require.NoError(t, compatibleDefinitions([]services.Selector{current}, []services.Selector{next}))
 }
 
 func TestCriteriaUpdaterRepeatedMatcherShutdown(t *testing.T) {

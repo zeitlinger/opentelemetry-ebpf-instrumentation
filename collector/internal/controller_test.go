@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pipeline"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/instrumenter"
 	"go.opentelemetry.io/obi/pkg/kube/kubeflags"
@@ -88,7 +89,16 @@ func TestRunOutlivesStartContext(t *testing.T) {
 	cfg.Attributes.HostID.Override = "test-host-id"
 	cfg.Attributes.MetadataRetry = metadata.RetryConfig{Timeout: time.Millisecond}
 	cfg.Attributes.Kubernetes.Enable = kubeflags.EnabledFalse
-	c := newTestController(t, id, cfg)
+	plan := dynamicspan.RulePlan{Glob: [][]dynamicspan.Span{{{Name: "collector"}}}}
+	c, err := NewController(id, cfg, true, plan, pipeline.SignalTraces)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		sharedControllersMu.Lock()
+		delete(sharedControllers, id)
+		sharedControllersMu.Unlock()
+	})
 
 	startCtx, cancelStart := context.WithCancel(context.Background())
 	if err := c.Start(startCtx, componenttest.NewNopHost()); err != nil {
@@ -107,6 +117,9 @@ func TestRunOutlivesStartContext(t *testing.T) {
 	}
 	if runCtx.Err() != nil {
 		t.Fatal("canceling the Start context stopped OBI")
+	}
+	if got := dynamicspan.RulePlanFromContext(runCtx); len(got.Glob) != 1 || got.Glob[0][0].Name != "collector" {
+		t.Fatalf("run context rule plan = %#v, want collector plan", got)
 	}
 
 	if err := c.Shutdown(context.Background()); err != nil {
@@ -302,7 +315,7 @@ func TestShutdownWithoutStartCleansSharedController(t *testing.T) {
 func newTestController(t *testing.T, id component.ID, cfg *obi.Config) *Controller {
 	t.Helper()
 
-	c, err := NewController(id, cfg, false, pipeline.SignalTraces)
+	c, err := NewController(id, cfg, false, dynamicspan.RulePlan{}, pipeline.SignalTraces)
 	if err != nil {
 		t.Fatalf("NewController returned error: %v", err)
 	}

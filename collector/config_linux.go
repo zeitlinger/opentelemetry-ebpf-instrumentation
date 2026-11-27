@@ -18,13 +18,15 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
 	"go.opentelemetry.io/obi/internal/config/convert"
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
 type receiverConfig struct {
-	runtime *obi.Config
-	v2      bool
+	runtime  *obi.Config
+	v2       bool
+	spanPlan dynamicspan.RulePlan
 }
 
 func (c *receiverConfig) Unmarshal(component *confmap.Conf) error {
@@ -49,16 +51,18 @@ func (c *receiverConfig) Unmarshal(component *confmap.Conf) error {
 		}
 		c.runtime = cfg
 		c.v2 = false
+		c.spanPlan = dynamicspan.RulePlan{}
 		return nil
 	}
 
-	cfg, err := convert.V2ToRuntime(extension)
+	cfg, plan, err := convert.V2ToRuntimeWithRulePlan(extension)
 	if err != nil {
 		return fmt.Errorf("convert OBI receiver config v2: %w", err)
 	}
 	setReceiverConsumers(cfg)
 	c.runtime = cfg
 	c.v2 = true
+	c.spanPlan = plan
 	return nil
 }
 

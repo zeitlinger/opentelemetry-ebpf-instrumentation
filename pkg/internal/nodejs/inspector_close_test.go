@@ -176,7 +176,7 @@ func TestInjectViaConnDisconnectsFromApplicationInspector(t *testing.T) {
 			defer conn.Close()
 
 			cfg := obi.DefaultConfig
-			err = NewNodeInjector(&cfg).injectViaConn(conn, false, nil)
+			err = NewNodeInjector(&cfg).injectViaConn(conn, false, nil, false)
 			if failEvaluation {
 				require.ErrorContains(t, err, "evaluation failed")
 			} else {

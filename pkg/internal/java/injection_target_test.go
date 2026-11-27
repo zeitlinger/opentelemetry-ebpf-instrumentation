@@ -21,7 +21,6 @@ import (
 	execdiscover "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/export"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -51,11 +50,10 @@ func TestInjectionTargetFromUsesInspectionIdentity(t *testing.T) {
 			},
 		},
 	})
-	dynamicspanstate.Set(fileInfo, []dynamicspan.Span{{Name: "selected.span", FunctionReference: "com.example.Selected#run()"}})
 	target, err := InjectionTargetFrom(&ebpf.Instrumentable{
 		FileInfo: fileInfo,
 		Type:     svc.InstrumentableJava,
-	})
+	}, []dynamicspan.Span{{Name: "selected.span", FunctionReference: "com.example.Selected#run()"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, app.PID(1000), target.Pid)
@@ -73,7 +71,7 @@ func TestInjectionTargetFromFailsWhenStableIdentityCannotBeOpened(t *testing.T) 
 	target, err := InjectionTargetFrom(&ebpf.Instrumentable{
 		FileInfo: execdiscover.New(execdiscover.Init{Pid: 1000, StartTime: 4242}),
 		Type:     svc.InstrumentableJava,
-	})
+	}, nil)
 
 	require.Error(t, err)
 	assert.Zero(t, target)
@@ -121,7 +119,7 @@ func TestInjectionTargetFromRejectsReusedPID(t *testing.T) {
 			StartTime: startTime + 1,
 		}),
 		Type: svc.InstrumentableJava,
-	})
+	}, nil)
 
 	require.Error(t, err)
 	assert.Zero(t, target)
@@ -143,7 +141,7 @@ func TestInjectionTargetFromRefusesUnidentifiedProcess(t *testing.T) {
 	target, err := InjectionTargetFrom(&ebpf.Instrumentable{
 		FileInfo: execdiscover.New(execdiscover.Init{Pid: pid}),
 		Type:     svc.InstrumentableJava,
-	})
+	}, nil)
 
 	require.Error(t, err)
 	assert.Zero(t, target)

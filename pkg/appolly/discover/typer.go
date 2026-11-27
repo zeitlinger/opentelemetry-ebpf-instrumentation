@@ -15,7 +15,6 @@ import (
 
 	"go.opentelemetry.io/otel/sdk/trace"
 
-	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/appolly/discover/exec"
@@ -23,7 +22,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	attr "go.opentelemetry.io/obi/pkg/export/attributes/names"
 	"go.opentelemetry.io/obi/pkg/export/imetrics"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/ebpf/gotracer"
 	"go.opentelemetry.io/obi/pkg/internal/goexec"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
@@ -58,6 +56,17 @@ func ExecTyperProvider(
 	input *msg.Queue[[]Event[ProcessMatch]],
 	output *msg.Queue[[]Event[ebpf.Instrumentable]],
 ) swarm.InstanceFunc {
+	return execTyperProvider(cfg, metrics, k8sInformer, input, output, nil)
+}
+
+func execTyperProvider(
+	cfg *obi.Config,
+	metrics imetrics.Reporter,
+	k8sInformer *kube.MetadataProvider,
+	input *msg.Queue[[]Event[ProcessMatch]],
+	output *msg.Queue[[]Event[ebpf.Instrumentable]],
+	spanHandoff *dynamicSpanHandoff,
+) swarm.InstanceFunc {
 	goOffsetsCache, _ := lru.New[cacheKey, goInspectionResult](100)
 
 	t := typer{
@@ -66,7 +75,9 @@ func ExecTyperProvider(
 		k8sInformer:    k8sInformer,
 		log:            slog.With("component", "discover.ExecTyper"),
 		currentPids:    map[app.PID]*exec.FileInfo{},
+		currentTypes:   map[app.PID]svc.InstrumentableType{},
 		goOffsetsCache: goOffsetsCache,
+		spanHandoff:    spanHandoff,
 	}
 	return func(_ context.Context) (swarm.RunFunc, error) {
 		// TODO: do it per executable
@@ -94,6 +105,8 @@ type typer struct {
 	k8sInformer    *kube.MetadataProvider
 	log            *slog.Logger
 	currentPids    map[app.PID]*exec.FileInfo
+	currentTypes   map[app.PID]svc.InstrumentableType
+	spanHandoff    *dynamicSpanHandoff
 	allGoFunctions []string
 	goOffsetsCache *lru.Cache[cacheKey, goInspectionResult]
 }
@@ -245,6 +258,8 @@ func (t *typer) makeServiceAttrs(processMatch *ProcessMatch) svc.Attrs {
 // of instrumentation points)
 func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumentable] {
 	var out []Event[ebpf.Instrumentable]
+	dynamicTargets := map[int]dynamicSpanTarget{}
+	createdTargets := map[*exec.FileInfo]dynamicSpanTarget{}
 
 	elfs := make([]*exec.FileInfo, 0, len(evs))
 	// Record the whole batch before looking up ancestors.
@@ -252,25 +267,42 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 		ev := &evs[i]
 		switch evs[i].Type {
 		case EventUpdated:
+			target, hasDynamicSpanUpdate := t.takeDynamicSpanTarget(&ev.Obj)
 			if fInfo, ok := t.currentPids[ev.Obj.Process.Pid]; ok {
+				if hasDynamicSpanUpdate {
+					dynamicTargets[len(out)] = target
+				}
 				out = append(out, Event[ebpf.Instrumentable]{
 					Type: EventUpdated,
-					Obj:  ebpf.Instrumentable{FileInfo: fInfo, SamplerConfig: samplingConfig(ev.Obj)},
+					Obj:  ebpf.Instrumentable{Type: t.currentTypes[ev.Obj.Process.Pid], FileInfo: fInfo, SamplerConfig: samplingConfig(ev.Obj)},
 				})
 			}
 		case EventCreated:
+			target, _ := t.takeDynamicSpanTarget(&ev.Obj)
 			svcID := t.makeServiceAttrs(&ev.Obj)
 
 			if elfFile, err := findExecElf(ev.Obj.Process, &svcID); err != nil {
 				t.log.Debug("error finding process ELF. Ignoring", "error", err)
 			} else {
-				dynamicspanstate.Set(elfFile, selectedDynamicSpans(ev.Obj.Criteria))
+				if len(target.spans) > 0 {
+					createdTargets[elfFile] = target
+				}
 				t.currentPids[ev.Obj.Process.Pid] = elfFile
 				elfs = append(elfs, elfFile)
 			}
 		case EventDeleted:
+			if target, ok := t.takeDynamicSpanTarget(&ev.Obj); ok && target.update {
+				if fInfo, exists := t.currentPids[ev.Obj.Process.Pid]; exists {
+					dynamicTargets[len(out)] = target
+					out = append(out, Event[ebpf.Instrumentable]{
+						Type: EventDeleted,
+						Obj:  ebpf.Instrumentable{Type: t.currentTypes[ev.Obj.Process.Pid], FileInfo: fInfo},
+					})
+				}
+			}
 			if fInfo, ok := t.currentPids[ev.Obj.Process.Pid]; ok {
 				delete(t.currentPids, ev.Obj.Process.Pid)
+				delete(t.currentTypes, ev.Obj.Process.Pid)
 				out = append(out, Event[ebpf.Instrumentable]{
 					Type: EventDeleted,
 					Obj:  ebpf.Instrumentable{FileInfo: fInfo},
@@ -281,22 +313,35 @@ func (t *typer) FilterClassify(evs []Event[ProcessMatch]) []Event[ebpf.Instrumen
 
 	for i := range elfs {
 		inst := t.asInstrumentable(elfs[i])
+		if t.currentTypes == nil {
+			t.currentTypes = map[app.PID]svc.InstrumentableType{}
+		}
+		t.currentTypes[inst.FileInfo.Pid()] = inst.Type
 		t.log.Debug(
 			"found an instrumentable process",
 			"UID", inst.FileInfo.ServiceAttrs().UID,
 			"type", inst.Type.String(),
 			"exec", inst.FileInfo.CmdExePath(), "pid", inst.FileInfo.Pid())
 		out = append(out, Event[ebpf.Instrumentable]{Type: EventCreated, Obj: inst})
+		if target, ok := createdTargets[inst.FileInfo]; ok {
+			dynamicTargets[len(out)-1] = target
+		}
+	}
+	if t.spanHandoff != nil {
+		for i := range out {
+			if target, ok := dynamicTargets[i]; ok {
+				t.spanHandoff.putInstrumentable(&out[i].Obj, target)
+			}
+		}
 	}
 	return out
 }
 
-func selectedDynamicSpans(criteria []services.Selector) []dynamicspan.Span {
-	var spans []dynamicspan.Span
-	for _, selector := range criteria {
-		spans = append(spans, dynamicspan.ForSelector(selector)...)
+func (t *typer) takeDynamicSpanTarget(match *ProcessMatch) (dynamicSpanTarget, bool) {
+	if t.spanHandoff == nil {
+		return dynamicSpanTarget{}, false
 	}
-	return spans
+	return t.spanHandoff.takeMatch(match)
 }
 
 // asInstrumentable classifies the discovered process.

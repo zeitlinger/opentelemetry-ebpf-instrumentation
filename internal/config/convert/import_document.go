@@ -14,6 +14,7 @@ import (
 	otelconfx "go.opentelemetry.io/contrib/otelconf/x"
 	"go.opentelemetry.io/otel/baggage"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/export/attributes"
@@ -33,35 +34,41 @@ const (
 // configuration. It imports the OBI extension plus the document-level
 // OpenTelemetry sections emitted by RuntimeToV2.
 func DocumentToRuntime(src *schema.Document) (*obi.Config, error) {
+	cfg, _, err := DocumentToRuntimeWithRulePlan(src)
+	return cfg, err
+}
+
+// DocumentToRuntimeWithRulePlan converts a v2 document and returns ordered span metadata.
+func DocumentToRuntimeWithRulePlan(src *schema.Document) (*obi.Config, dynamicspan.RulePlan, error) {
 	if src == nil {
-		return nil, errors.New("missing OBI document")
+		return nil, dynamicspan.RulePlan{}, errors.New("missing OBI document")
 	}
 	if err := validateV2Document(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 
-	cfg, err := V2ToRuntime(src.Extensions.OBI)
+	cfg, plan, err := V2ToRuntimeWithRulePlan(src.Extensions.OBI)
 	if err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 
 	if err := applyV2Resource(cfg, src.Resource); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := applyV2TracerProvider(cfg, src.TracerProvider); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := applyV2MeterProvider(cfg, src.MeterProvider); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := applyV2LoggerProvider(cfg, src.LoggerProvider); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := applyV2LogLevel(cfg, src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 
-	return cfg, nil
+	return cfg, plan, nil
 }
 
 func validateV2Document(src *schema.Document) error {

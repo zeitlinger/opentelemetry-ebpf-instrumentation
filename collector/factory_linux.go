@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/obi/collector/internal"
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/kube/klogbridge"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
@@ -60,13 +61,15 @@ func BuildTracesReceiver() receiver.CreateTracesFunc {
 		cfg.Traces.TracesExport = tracesExport(nextConsumer)
 
 		v2 := false
+		var spanPlan dynamicspan.RulePlan
 		if receiverCfg, ok := baseCfg.(*receiverConfig); ok {
 			v2 = receiverCfg.v2
+			spanPlan = receiverCfg.spanPlan
 		}
 		if v2 {
 			useServiceTelemetry(cfg, rs)
 		}
-		return internal.NewController(rs.ID, cfg, v2, pipeline.SignalTraces)
+		return internal.NewController(rs.ID, cfg, v2, spanPlan, pipeline.SignalTraces)
 	}
 }
 
@@ -85,13 +88,15 @@ func BuildMetricsReceiver() receiver.CreateMetricsFunc {
 		cfg.OTELMetrics.MetricsExport = metricsExport(nextConsumer)
 
 		v2 := false
+		var spanPlan dynamicspan.RulePlan
 		if receiverCfg, ok := baseCfg.(*receiverConfig); ok {
 			v2 = receiverCfg.v2
+			spanPlan = receiverCfg.spanPlan
 		}
 		if v2 {
 			useServiceTelemetry(cfg, rs)
 		}
-		return internal.NewController(rs.ID, cfg, v2, pipeline.SignalMetrics)
+		return internal.NewController(rs.ID, cfg, v2, spanPlan, pipeline.SignalMetrics)
 	}
 }
 
@@ -110,13 +115,15 @@ func BuildLogsReceiver() receiver.CreateLogsFunc {
 		cfg.Logs.LogsExport = logsExport(nextConsumer)
 
 		v2 := false
+		var spanPlan dynamicspan.RulePlan
 		if receiverCfg, ok := baseCfg.(*receiverConfig); ok {
 			v2 = receiverCfg.v2
+			spanPlan = receiverCfg.spanPlan
 		}
 		if v2 {
 			useServiceTelemetry(cfg, rs)
 		}
-		return internal.NewController(rs.ID, cfg, v2, pipeline.SignalLogs)
+		return internal.NewController(rs.ID, cfg, v2, spanPlan, pipeline.SignalLogs)
 	}
 }
 

@@ -662,10 +662,16 @@ supported by the current adapter; use capture rules for workload selection.
 `capture.rules[].refine.spans/development` is the experimental, opt-in list for
 per-rule dynamic spans. An omitted or empty list leaves them off. Currently,
 the Java and Node.js adapters support only `on.function`. `function_noret` and
-USDT targets are reserved schema shapes, not supported runtime targets. This
-is startup-only. Any configuration refresh while experimental spans are
-configured in either the current or next configuration requires restarting OBI.
-For current runtime support, see the [dynamic instrumentation reference](dynamic-instrumentation.md).
+USDT targets are reserved schema shapes, not supported runtime targets. For
+supported, compatible Java and Node.js agents already running under OBI,
+refreshing the configuration file can add, replace, or clear dynamic span rules
+without restarting OBI or the workload. An omitted or empty list clears the
+rules for that workload. Refreshing does not undo completed spans or change
+spans already in flight. Unsupported or incompatible resident agents might not
+be updated, and not every function reference can necessarily be wrapped. The
+Collector continues to use its startup configuration. This file refresh does
+not add a Collector configuration refresh mechanism. For current runtime
+support, see the [dynamic instrumentation reference](dynamic-instrumentation.md).
 The proposed Java method selector is described in the
 [Java method reference contract](java-method-reference.md).
 

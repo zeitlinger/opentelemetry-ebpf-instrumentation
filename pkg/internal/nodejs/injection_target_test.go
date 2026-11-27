@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	execdiscover "go.opentelemetry.io/obi/pkg/appolly/discover/exec"
 	"go.opentelemetry.io/obi/pkg/ebpf"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -42,24 +41,23 @@ func TestInjectionTargetFromUsesInspectionIdentity(t *testing.T) {
 		return nil, nil
 	})
 
-	target, err := InjectionTargetFrom(nodeInstrumentable(1000, 4242))
+	target, err := InjectionTargetFrom(nodeInstrumentable(1000, 4242), nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, app.PID(1000), target.Pid)
 	assert.Equal(t, app.PID(1000), target.PID())
 }
 
-func TestInjectionTargetFromCarriesOnlyMatchedDynamicSpans(t *testing.T) {
+func TestInjectionTargetFromCopiesDynamicSpans(t *testing.T) {
 	spans := []dynamicspan.Span{{Name: "checkout.place_order", FunctionReference: "**/checkout.js:exports.placeOrder"}}
 	inst := nodeInstrumentable(1000, 4242)
 	inst.FileInfo = execdiscover.New(execdiscover.Init{
 		Pid:       1000,
 		StartTime: 4242,
 	})
-	dynamicspanstate.Set(inst.FileInfo, spans)
 	stubOpenProcessHandle(t, func(app.PID, uint64) (*procs.ProcessHandle, error) { return nil, nil })
 
-	target, err := InjectionTargetFrom(inst)
+	target, err := InjectionTargetFrom(inst, spans)
 
 	require.NoError(t, err)
 	assert.Equal(t, spans, target.DynamicSpans)
@@ -74,7 +72,7 @@ func TestInjectionTargetFromRefusesUnpinnableProcess(t *testing.T) {
 		return nil, want
 	})
 
-	_, err := InjectionTargetFrom(nodeInstrumentable(1000, 0))
+	_, err := InjectionTargetFrom(nodeInstrumentable(1000, 0), nil)
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, want)

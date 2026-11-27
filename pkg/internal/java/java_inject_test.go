@@ -633,6 +633,13 @@ func TestJavaInjector_AttachOptsKeepsDynamicSpansProcessScoped(t *testing.T) {
 	require.Empty(t, unselected)
 }
 
+func TestJavaInjector_DynamicSpanUpdateOptsAlwaysMarksReplacement(t *testing.T) {
+	injector := &JavaInjector{cfg: &obi.Config{}, log: slog.Default()}
+	assert.Equal(t, "=updateDynamicSpans=true", injector.dynamicSpanUpdateOpts(nil))
+	assert.Contains(t, injector.dynamicSpanUpdateOpts([]dynamicspan.Span{{Name: "selected", FunctionReference: "com.example.Selected#run()"}}),
+		"updateDynamicSpans=true")
+}
+
 func TestJavaInjector_HeaderPropagationAttachOpts(t *testing.T) {
 	previous := supportsHeaderPropagation
 	t.Cleanup(func() { supportsHeaderPropagation = previous })
@@ -1012,7 +1019,7 @@ func TestJavaInjector_VerifyLoadedAgentHandlesPropertiesFailure(t *testing.T) {
 				} else {
 					attacher.reader = io.NopCloser(iotest.ErrReader(io.ErrUnexpectedEOF))
 				}
-				err := injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true)
+				err := injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true, false)
 				if version != "" {
 					require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 				} else {
@@ -1039,7 +1046,7 @@ func TestJavaInjector_VerifyLoadedAgentUsesOnePropertiesRequest(t *testing.T) {
 			attacher := &propertiesAttacher{
 				response: httpClientPropagationProperty + "=" + capability + "\n" + httpClientAsyncPropagationProperty + "=" + capability + "\n" + agentVersionProperty + "=3\n",
 			}
-			require.NoError(t, injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true))
+			require.NoError(t, injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true, false))
 			require.Equal(t, 1, attacher.calls)
 			require.Equal(t, 1, attacher.cleanups)
 			assert.Equal(t, capability != "true", strings.Contains(logs.String(), "propagation unavailable"))
@@ -1050,10 +1057,18 @@ func TestJavaInjector_VerifyLoadedAgentUsesOnePropertiesRequest(t *testing.T) {
 func TestJavaInjector_VerifyLoadedAgentRejectsVersionMismatch(t *testing.T) {
 	injector := &JavaInjector{log: slog.Default(), agentVersion: "3"}
 	attacher := &propertiesAttacher{response: agentVersionProperty + "=2\n" + httpClientPropagationProperty + "=true\n"}
-	err := injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true)
+	err := injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true, false)
 	require.ErrorContains(t, err, "version 2, expected 3")
 	require.Equal(t, 1, attacher.calls)
 	require.Equal(t, 1, attacher.cleanups)
+}
+
+func TestJavaInjector_VerifyLoadedAgentRequiresDynamicSpanUpdateCapability(t *testing.T) {
+	injector := &JavaInjector{log: slog.Default(), agentVersion: "3"}
+	oldAgent := &propertiesAttacher{response: agentVersionProperty + "=3\n"}
+	require.ErrorContains(t, injector.verifyLoadedAgent(context.Background(), oldAgent, nil, 42, false, true), "does not support live dynamic-span updates")
+	currentAgent := &propertiesAttacher{response: agentVersionProperty + "=3\n" + dynamicSpanUpdateProperty + "=true\n"}
+	require.NoError(t, injector.verifyLoadedAgent(context.Background(), currentAgent, nil, 42, false, true))
 }
 
 func TestJavaInjector_ReportsMissingAsyncCapabilityOnOlderAgent(t *testing.T) {
@@ -1063,7 +1078,7 @@ func TestJavaInjector_ReportsMissingAsyncCapabilityOnOlderAgent(t *testing.T) {
 		agentVersion: "3",
 	}
 	attacher := &propertiesAttacher{response: agentVersionProperty + "=3\n" + httpClientPropagationProperty + "=true\n"}
-	require.NoError(t, injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true))
+	require.NoError(t, injector.verifyLoadedAgent(context.Background(), attacher, nil, 42, true, false))
 	assert.Contains(t, logs.String(), "HttpClient.sendAsync header propagation unavailable")
 	assert.Contains(t, logs.String(), "effective=unavailable")
 	assert.Contains(t, logs.String(), "restart the JVM")
@@ -1113,14 +1128,14 @@ func TestJavaInjector_LazyAgentVersionParsing(t *testing.T) {
 		assert.Empty(t, injector.agentVersion, "JAR version should not be parsed during NewJavaInjector")
 
 		matching := &propertiesAttacher{response: agentVersionProperty + "=7\n"}
-		require.NoError(t, injector.verifyLoadedAgent(t.Context(), matching, nil, 42, false))
+		require.NoError(t, injector.verifyLoadedAgent(t.Context(), matching, nil, 42, false, false))
 		assert.Equal(t, 1, matching.calls)
 		assert.Equal(t, "7", injector.agentVersion)
 
 		// Mutating embeddedJavaAgentBytes after the first lookup proves sync.Once caching.
 		embeddedJavaAgentBytes = agentJar(t, agentVersionResource, agentVersionProperty+"=99\n")
 		mismatched := &propertiesAttacher{response: agentVersionProperty + "=6\n"}
-		require.ErrorContains(t, injector.verifyLoadedAgent(t.Context(), mismatched, nil, 42, false), "expected 7")
+		require.ErrorContains(t, injector.verifyLoadedAgent(t.Context(), mismatched, nil, 42, false, false), "expected 7")
 		assert.Equal(t, 1, mismatched.calls)
 	})
 
@@ -1137,12 +1152,12 @@ func TestJavaInjector_LazyAgentVersionParsing(t *testing.T) {
 		require.NotNil(t, injector)
 
 		attacher := &propertiesAttacher{response: agentVersionProperty + "=3\n"}
-		require.NoError(t, injector.verifyLoadedAgent(t.Context(), attacher, nil, 42, false))
+		require.NoError(t, injector.verifyLoadedAgent(t.Context(), attacher, nil, 42, false, false))
 		assert.Zero(t, attacher.calls)
 
 		// Subsequent lookups remain cached as "" even if embedded bytes change.
 		embeddedJavaAgentBytes = agentJar(t, agentVersionResource, agentVersionProperty+"=7\n")
-		require.NoError(t, injector.verifyLoadedAgent(t.Context(), attacher, nil, 42, false))
+		require.NoError(t, injector.verifyLoadedAgent(t.Context(), attacher, nil, 42, false, false))
 		assert.Zero(t, attacher.calls)
 	})
 }

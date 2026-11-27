@@ -304,7 +304,7 @@ func (i *NodeInjector) injectFileWS(wsConn *websocket.Conn, payload []byte, clos
 	return nil
 }
 
-func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool, dynamicSpans []dynamicspan.Span) error {
+func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool, dynamicSpans []dynamicspan.Span, update bool) error {
 	wsURL, err := i.requestDebuggerURL(conn)
 	if err != nil {
 		conn.Close()
@@ -313,7 +313,11 @@ func (i *NodeInjector) injectViaConn(conn net.Conn, closeInspector bool, dynamic
 
 	i.log.Debug("found debugger url", "url", wsURL)
 
-	payload, err := evaluateRequest(i.agentCodeForSpans(dynamicSpans), 1)
+	code := i.agentCodeForSpans(dynamicSpans)
+	if update {
+		code = i.dynamicSpanUpdateCode(dynamicSpans, code)
+	}
+	payload, err := evaluateRequest(code, 1)
 	if err != nil {
 		conn.Close()
 		return err

@@ -48,8 +48,14 @@ var defaultV2ServiceNameSourcesWithoutCloud = []transform.Source{
 // V2ToRuntime converts a config v2 extension shape into an OBI runtime
 // configuration.
 func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
+	cfg, _, err := V2ToRuntimeWithRulePlan(src)
+	return cfg, err
+}
+
+// V2ToRuntimeWithRulePlan converts config v2 and returns its ordered dynamic-span metadata.
+func V2ToRuntimeWithRulePlan(src *schema.Extension) (*obi.Config, dynamicspan.RulePlan, error) {
 	if err := schema.ValidateStandalone(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	_, defaults := RuntimeToV2(nil)
 	// Enable Route53 for new v2 configurations without changing v1 migration defaults.
@@ -62,44 +68,44 @@ func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
 	var err error
 	src, complete, err = src.WithDefaults(defaults)
 	if err != nil {
-		return nil, fmt.Errorf("applying config v2 defaults: %w", err)
+		return nil, dynamicspan.RulePlan{}, fmt.Errorf("applying config v2 defaults: %w", err)
 	}
 	if src.Capture.Telemetry.Metrics.ConnectionInfoTTL.TimeDuration() < 0 {
-		return nil, errors.New("capture.telemetry.metrics.connection_info_ttl must not be negative")
+		return nil, dynamicspan.RulePlan{}, errors.New("capture.telemetry.metrics.connection_info_ttl must not be negative")
 	}
 	if err := validateV2Channels(src.Capture.Channels); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateV2Correlation(src.Correlation, complete); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	policy := effectiveV2CapturePolicy(src.Capture.Policy, src.Capture.Rules, complete)
 	if err := validateV2CaptureRules(policy, src.Capture.Rules); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateV2RulePatterns(src.Capture.Rules); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateV2SignalFilters(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := reconcileV2FlowLimitAliases(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateV2HTTPRoutes(src.Capture.Instrumentation.HTTP.Routes, src.Capture.Rules); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateV2HTTPPayloadExtraction(src.Capture.Instrumentation.HTTP.PayloadExtraction); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateUnsupportedV2Fields(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateUnsupportedV2Network(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := validateUnsupportedV2Enrichment(src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 
 	normalized := *src
@@ -108,20 +114,20 @@ func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
 
 	cfg := runtimeConfigDefaults()
 	cfg.Attributes.UseV2Selection = true
-	applyV2Capture(&cfg, src, policy, complete)
+	plan := applyV2Capture(&cfg, src, policy, complete)
 	applyV2Standalone(&cfg, src, complete)
 	if err := applyV2PeerMetadata(&cfg, src.Enrich, complete); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := applyV2CaptureAttributes(&cfg, src); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := applyV2MetricsEnablement(&cfg, src, complete); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	cfg.Attributes.Select.Normalize()
 	if err := cfg.EBPF.LogEnricher.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid log trace annotation: %w", err)
+		return nil, dynamicspan.RulePlan{}, fmt.Errorf("invalid log trace annotation: %w", err)
 	}
 	if !cfg.CloudMetadata.DetectionEnabled {
 		if serviceNameSourcesOmitted {
@@ -131,7 +137,7 @@ func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
 		for _, source := range cfg.NameResolver.Sources {
 			switch transform.Source(strings.ToLower(string(source))) {
 			case transform.SourceECS, transform.SourceRoute53, transform.SourceGCE, transform.SourceAzure:
-				return nil, fmt.Errorf(
+				return nil, dynamicspan.RulePlan{}, fmt.Errorf(
 					"enrich.service_name.sources: %q requires enrich.enrichers.cloud.detection.enabled to be true",
 					source,
 				)
@@ -145,7 +151,7 @@ func V2ToRuntime(src *schema.Extension) (*obi.Config, error) {
 		})
 	}
 
-	return &cfg, nil
+	return &cfg, plan, nil
 }
 
 func validateV2Channels(channels schema.CaptureChannels) error {
@@ -350,10 +356,10 @@ func runtimeConfigDefaults() obi.Config {
 	return cfg
 }
 
-func applyV2Capture(cfg *obi.Config, src *schema.Extension, policy schema.CapturePolicy, complete bool) {
+func applyV2Capture(cfg *obi.Config, src *schema.Extension, policy schema.CapturePolicy, complete bool) dynamicspan.RulePlan {
 	cfg.Exceptions = src.Capture.Exceptions
 	applyV2Policy(cfg, policy, complete || completePolicy(policy))
-	hasRuleRoutePolicies := applyV2Rules(cfg, src.Capture.Rules, policy)
+	plan, hasRuleRoutePolicies := applyV2Rules(cfg, src.Capture.Rules, policy)
 	applyV2Limits(cfg, src.Capture.Limits, complete || completeLimits(src.Capture.Limits))
 	applyV2Safety(cfg, src.Capture.Safety, complete || !zeroValue(src.Capture.Safety))
 	applyV2Channels(cfg, src.Capture.Channels, complete || completeChannels(src.Capture.Channels))
@@ -367,6 +373,7 @@ func applyV2Capture(cfg *obi.Config, src *schema.Extension, policy schema.Captur
 	applyV2Runtimes(cfg, src.Capture.Runtimes, complete || completeRuntimes(src.Capture.Runtimes))
 	applyV2CaptureTelemetry(cfg, src.Capture.Telemetry, complete || completeCaptureTelemetry(src.Capture.Telemetry))
 	applyV2TargetInfo(cfg, src.Capture.Metrics.TargetInfo)
+	return plan
 }
 
 func applyV2TargetInfo(cfg *obi.Config, targetInfo schema.CaptureTargetInfo) {
@@ -406,14 +413,14 @@ type runtimeDiscoveryRules struct {
 	defaultOTLPGRPCPort             int
 }
 
-func applyV2Rules(cfg *obi.Config, rules []schema.Rule, policy schema.CapturePolicy) bool {
+func applyV2Rules(cfg *obi.Config, rules []schema.Rule, policy schema.CapturePolicy) (dynamicspan.RulePlan, bool) {
 	if rules == nil {
 		if policy.DefaultAction == schema.CaptureActionInclude {
 			cfg.Discovery.Instrument = services.GlobDefinitionCriteria{
 				{Path: services.NewGlob("*")},
 			}
 		}
-		return false
+		return dynamicspan.RulePlan{}, false
 	}
 
 	converted := runtimeDiscoveryRulesFromV2(rules, policy.MatchOrder)
@@ -421,7 +428,20 @@ func applyV2Rules(cfg *obi.Config, rules []schema.Rule, policy schema.CapturePol
 		addDefaultIncludeSelector(&converted)
 	}
 	applyRuntimeDiscoveryRules(cfg, converted)
-	return converted.hasRoutePolicies
+	plan := dynamicspan.RulePlan{Glob: converted.includeGlobSpans, Regex: converted.includeRegexSpans}
+	if !hasDynamicSpans(plan.Glob) && !hasDynamicSpans(plan.Regex) {
+		plan = dynamicspan.RulePlan{}
+	}
+	return plan, converted.hasRoutePolicies
+}
+
+func hasDynamicSpans(rows [][]dynamicspan.Span) bool {
+	for _, spans := range rows {
+		if len(spans) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func addDefaultIncludeSelector(rules *runtimeDiscoveryRules) {
@@ -504,15 +524,9 @@ func applyRuntimeDiscoveryRules(cfg *obi.Config, rules runtimeDiscoveryRules) {
 	// ExcludedLinuxSystemPaths only controls language detection, so it retains
 	// its runtime default instead of being represented as a capture rule.
 	cfg.Discovery.Instrument = rules.includeGlobs
-	for i, spans := range rules.includeGlobSpans {
-		dynamicspan.RegisterSelector(&cfg.Discovery.Instrument[i], spans)
-	}
 	cfg.Discovery.ExcludeInstrument = rules.excludeGlobs
 	cfg.Discovery.DefaultExcludeInstrument = nil
 	cfg.Discovery.Services = rules.includeRegex
-	for i, spans := range rules.includeRegexSpans {
-		dynamicspan.RegisterSelector(&cfg.Discovery.Services[i], spans)
-	}
 	cfg.Discovery.ExcludeServices = rules.excludeRegex
 	cfg.Discovery.DefaultExcludeServices = nil
 	cfg.Discovery.ExcludeOTelInstrumentedServices = rules.excludeOTelInstrumentedServices

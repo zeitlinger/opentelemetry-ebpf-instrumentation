@@ -25,11 +25,13 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.regex.Pattern;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.loading.ClassInjector;
+import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.pool.TypePool;
 import net.bytebuddy.utility.JavaModule;
 
@@ -87,7 +89,7 @@ public class Agent {
     }
   }
 
-  private static Map<String, String> parseArgs(String agentArgs) {
+  static Map<String, String> parseArgs(String agentArgs) {
     Map<String, String> opts = new HashMap<>();
     if (agentArgs != null && !agentArgs.isEmpty()) {
       String[] options = agentArgs.split(",");
@@ -102,7 +104,7 @@ public class Agent {
     return opts;
   }
 
-  private static boolean optEnabled(Map<String, String> opts, String opt) {
+  static boolean optEnabled(Map<String, String> opts, String opt) {
     String optVal = opts.getOrDefault(opt, "");
     return optVal.toLowerCase(Locale.getDefault()).equals("true");
   }
@@ -130,11 +132,13 @@ public class Agent {
       // Check if agent is already loaded
       if (agentLoaded) {
         System.err.println("OpenTelemetry eBPF Java Agent already loaded, skipping initialization");
+        return;
       }
       agentLoaded = true;
     }
 
     publishVersion();
+    Pattern.compile("").matcher("").matches();
 
     Map<String, String> opts = parseArgs(agentArgs);
     List<DynamicSpanDefinition> dynamicSpans = Collections.emptyList();
@@ -148,11 +152,7 @@ public class Agent {
       injectBootstrapClasses(inst);
       dynamicSpans = parseDynamicSpans(opts.get("dynamicSpans"));
       if (!dynamicSpans.isEmpty()) {
-        Class<?> bootstrapDynamicSpanRuntime =
-            Class.forName("io.opentelemetry.obi.java.DynamicSpanRuntime", true, null);
-        bootstrapDynamicSpanRuntime
-            .getMethod("configure", List.class, Instrumentation.class)
-            .invoke(null, dynamicSpans, inst);
+        configureDynamicSpans(dynamicSpans, inst);
       }
       if (Agent.debugOn) {
         setupInstrumentationsDebugging();
@@ -192,13 +192,15 @@ public class Agent {
             .type(VirtualThreadInst.type())
             .transform(VirtualThreadInst.transformer());
 
-    if (!dynamicSpans.isEmpty()) {
-      agentBuilder =
-          agentBuilder
-              .type(DynamicSpanInst.type(dynamicSpans))
-              .transform(DynamicSpanInst.transformer(dynamicSpans));
-    }
+    agentBuilder =
+        agentBuilder
+            .type(dynamicSpanType())
+            .transform(
+                (builder, type, classLoader, module, protectionDomain) ->
+                    DynamicSpanInst.transformer(dynamicSpanDefinitions())
+                        .transform(builder, type, classLoader, module, protectionDomain));
     agentBuilder.installOn(inst);
+    System.setProperty("otel.obi.java.agent.dynamicspan.update", "true");
 
     if (optEnabled(opts, "runtimeMetrics")) {
       try {
@@ -216,8 +218,63 @@ public class Agent {
 
   // Needed for Dynamic Agent Injection
   public static void agentmain(String args, Instrumentation inst) {
+    Map<String, String> opts = parseArgs(args);
+    if (optEnabled(opts, "updateDynamicSpans")) {
+      updateDynamicSpans(opts, inst);
+      return;
+    }
     premain(args, inst);
     retransformLoadedClasses(inst);
+  }
+
+  private static ElementMatcher<? super TypeDescription> dynamicSpanType() {
+    return new ElementMatcher.Junction.AbstractBase<TypeDescription>() {
+      @Override
+      public boolean matches(TypeDescription type) {
+        return DynamicSpanInst.type(dynamicSpanDefinitions()).matches(type);
+      }
+    };
+  }
+
+  private static void updateDynamicSpans(Map<String, String> opts, Instrumentation inst) {
+    if (!"true".equals(System.getProperty("otel.obi.java.agent.dynamicspan.update"))) {
+      throw new IllegalStateException(
+          "Cannot update dynamic Java spans: OBI agent is not initialized");
+    }
+    try {
+      List<DynamicSpanDefinition> configured = parseDynamicSpans(opts.get("dynamicSpans"));
+      List<DynamicSpanDefinition> previous = dynamicSpanDefinitions();
+      try {
+        configureDynamicSpans(configured, inst);
+      } catch (Throwable error) {
+        configureDynamicSpans(previous, inst);
+        throw error;
+      }
+    } catch (Throwable error) {
+      throw new IllegalStateException("Failed to update dynamic Java spans", error);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<DynamicSpanDefinition> dynamicSpanDefinitions() {
+    try {
+      Class<?> runtime = Class.forName("io.opentelemetry.obi.java.DynamicSpanRuntime", true, null);
+      return (List<DynamicSpanDefinition>) runtime.getMethod("definitions").invoke(null);
+    } catch (Exception error) {
+      if (debugOn) {
+        System.err.println("Failed to read dynamic Java span definitions: " + error);
+      }
+      return Collections.emptyList();
+    }
+  }
+
+  private static void configureDynamicSpans(
+      List<DynamicSpanDefinition> configured, Instrumentation inst) throws Exception {
+    Class<?> bootstrapDynamicSpanRuntime =
+        Class.forName("io.opentelemetry.obi.java.DynamicSpanRuntime", true, null);
+    bootstrapDynamicSpanRuntime
+        .getMethod("configure", List.class, Instrumentation.class)
+        .invoke(null, configured, inst);
   }
 
   // Package-private for testing. Retransforms already-loaded classes that match the agent's

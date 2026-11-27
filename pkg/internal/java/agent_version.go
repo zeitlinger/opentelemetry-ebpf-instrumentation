@@ -21,6 +21,7 @@ const (
 	agentVersionProperty               = "otel.obi.java.agent.version"
 	httpClientPropagationProperty      = "otel.obi.java.agent.httpclient.propagation"
 	httpClientAsyncPropagationProperty = "otel.obi.java.agent.httpclient.async.propagation"
+	dynamicSpanUpdateProperty          = "otel.obi.java.agent.dynamicspan.update"
 
 	// agentVersionResource is the agent JAR entry holding agentVersionProperty. The agent reads
 	// it at load time and OBI reads it from the JAR it injects, so both sides of the comparison

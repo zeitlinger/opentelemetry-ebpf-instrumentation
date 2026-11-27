@@ -1,0 +1,64 @@
+services:
+  java:
+    build:
+      context: ../../..
+      dockerfile: internal/test/integration/components/java_httpclient_traceparent/Dockerfile
+      args:
+        - JAVA_HTTPCLIENT_RUNTIME_IMAGE
+    image: hatest-java-dynamic-spans
+    command: [service]
+    environment:
+      OTEL_SERVICE_NAME: dynamic-java
+    ports:
+      - "18080:8080"
+
+  proxy:
+    image: hatest-java-dynamic-spans
+    entrypoint: [/fixture/proxy]
+    depends_on:
+      java:
+        condition: service_started
+
+  node:
+    build:
+      context: ../../..
+      dockerfile: internal/test/integration/components/nodejsdynamicspans/Dockerfile
+    image: hatest-nodejs-dynamic-spans
+    environment:
+      OTEL_SERVICE_NAME: dynamic-node
+    ports:
+      - "18090:3030"
+
+  obi:
+    build:
+      context: ../../..
+      dockerfile: internal/test/integration/components/obi/Dockerfile-with-javaagent
+    image: hatest-obi-dynamic-spans
+    privileged: true
+    pid: host
+    network_mode: host
+    command: ["--config=/configs/obi.yml"]
+    volumes:
+      - ${CONFIG_RELOAD_DIR:?CONFIG_RELOAD_DIR must be set}:/configs:ro
+      - ./system/sys/kernel/security_none:/sys/kernel/security:ro
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    environment:
+      OTEL_EBPF_EXECUTABLE_PATH: ""
+      OTEL_EBPF_DISCOVERY_POLL_INTERVAL: 100ms
+      OTEL_EBPF_PROCESSES_INTERVAL: 100ms
+      OTEL_EBPF_BPF_WAKEUP_LEN: "1"
+    depends_on:
+      java:
+        condition: service_started
+      node:
+        condition: service_started
+      jaeger:
+        condition: service_started
+
+  jaeger:
+    image: jaegertracing/jaeger:2.23.0@sha256:3823829974ccfc2485d2e48b165579091f32295022ae80ca49704e2f4834116e
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    command: ["--set=service.telemetry.logs.level=debug"]

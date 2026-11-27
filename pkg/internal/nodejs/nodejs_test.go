@@ -10,11 +10,9 @@ import (
 
 	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
-	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
 	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/debug"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
 
@@ -43,8 +41,8 @@ func TestAcceptsSkipsDeno(t *testing.T) {
 
 	injector := NewNodeInjector(&cfg)
 	require.True(t, injector.Enabled())
-	require.False(t, injector.Accepts(&ebpf.Instrumentable{Type: svc.InstrumentableDeno}))
-	require.True(t, injector.Accepts(&ebpf.Instrumentable{Type: svc.InstrumentableNodejs}))
+	require.False(t, injector.Accepts(&ebpf.Instrumentable{Type: svc.InstrumentableDeno}, nil))
+	require.True(t, injector.Accepts(&ebpf.Instrumentable{Type: svc.InstrumentableNodejs}, nil))
 }
 
 func TestDynamicSpansOnlyAcceptMatchingProcesses(t *testing.T) {
@@ -52,13 +50,10 @@ func TestDynamicSpansOnlyAcceptMatchingProcesses(t *testing.T) {
 	cfg.NodeJS.Enabled = true
 	cfg.TracePrinter = ""
 	cfg.Metrics.Features = 0
-	cfg.Discovery.Instrument = services.GlobDefinitionCriteria{{}}
-	dynamicspan.RegisterSelector(&cfg.Discovery.Instrument[0], []dynamicspan.Span{{Name: "span"}})
 	injector := NewNodeInjector(&cfg)
-	require.True(t, injector.Enabled())
-	require.False(t, injector.Accepts(nodeInstrumentable(1000, 4242)))
+	require.False(t, injector.Enabled())
+	require.False(t, injector.Accepts(nodeInstrumentable(1000, 4242), nil))
 
 	matched := nodeInstrumentable(1001, 4242)
-	dynamicspanstate.Set(matched.FileInfo, []dynamicspan.Span{{Name: "span"}})
-	require.True(t, injector.Accepts(matched))
+	require.True(t, injector.Accepts(matched, []dynamicspan.Span{{Name: "span"}}))
 }

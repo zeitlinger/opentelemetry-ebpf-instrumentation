@@ -32,6 +32,62 @@ var (
 // criteriaMatcherProvider filters the processes that match the discovery criteria.
 // When dynamicSelector is non-nil, only the dynamic selector is used (no config criteria),
 // and the matcher listens to the selector's RemovedNotify() channel for synthetic deletes.
+type criteriaSpanOptions struct {
+	handoff *dynamicSpanHandoff
+	plan    dynamicspan.RulePlan
+}
+
+func spansBySelector(selectors []services.Selector, plan dynamicspan.RulePlan, targetPIDs bool) map[services.Selector][]dynamicspan.Span {
+	spans := map[services.Selector][]dynamicspan.Span{}
+	if targetPIDs || len(selectors) == 0 {
+		return spans
+	}
+	var configuredRows [][]dynamicspan.Span
+	switch selectors[0].(type) {
+	case *services.GlobAttributes:
+		configuredRows = plan.Glob
+	case *services.RegexSelector:
+		configuredRows = plan.Regex
+	default:
+		return spans
+	}
+	for i, configured := range configuredRows {
+		if i >= len(selectors) || len(configured) == 0 {
+			continue
+		}
+		if _, hasPIDs := selectors[i].GetPIDs(); hasPIDs {
+			continue
+		}
+		switch selectors[i].(type) {
+		case *services.GlobAttributes, *services.RegexSelector:
+			spans[selectors[i]] = append([]dynamicspan.Span(nil), configured...)
+		}
+	}
+	return spans
+}
+
+func (m *Matcher) dynamicSpansFor(criteria []services.Selector) []dynamicspan.Span {
+	var spans []dynamicspan.Span
+	for _, criterion := range criteria {
+		switch criterion.(type) {
+		case *services.GlobAttributes, *services.RegexSelector:
+			spans = append(spans, m.dynamicSpans[criterion]...)
+		}
+	}
+	return spans
+}
+
+func (m *Matcher) sendMatches(ctx context.Context, events []Event[ProcessMatch]) {
+	if m.spanHandoff != nil {
+		for i := range events {
+			if events[i].Type == EventCreated {
+				m.spanHandoff.putMatch(&events[i].Obj, m.dynamicSpansFor(events[i].Obj.Criteria), false, false)
+			}
+		}
+	}
+	m.Output.SendCtx(ctx, events)
+}
+
 func criteriaMatcherProvider(
 	cfg *obi.Config,
 	input *msg.Queue[[]Event[ProcessAttrs]],
@@ -39,6 +95,7 @@ func criteriaMatcherProvider(
 	configCriteria []services.Selector,
 	dynamicSelector *DynamicSelector,
 	updates *services.CriteriaUpdates,
+	spanOptions ...criteriaSpanOptions,
 ) swarm.InstanceFunc {
 	instrumenterNamespace, _ := namespaceFetcherFunc(app.PID(osPidFunc()))
 	if dynamicSelector != nil {
@@ -46,6 +103,10 @@ func criteriaMatcherProvider(
 		return swarm.DirectInstance(emptyFunc)
 	}
 
+	var options criteriaSpanOptions
+	if len(spanOptions) > 0 {
+		options = spanOptions[0]
+	}
 	m := &Matcher{
 		Log:                 slog.With("component", "discover.CriteriaMatcher"),
 		Criteria:            configCriteria,
@@ -57,6 +118,9 @@ func criteriaMatcherProvider(
 		Namespace:           instrumenterNamespace,
 		HasHostPidAccess:    hasHostPidAccess(),
 		CriteriaUpdates:     updates,
+		dynamicSpans:        spansBySelector(configCriteria, options.plan, cfg.TargetPIDs.Len() > 0),
+		spanHandoff:         options.handoff,
+		targetPIDs:          cfg.TargetPIDs.Len() > 0,
 	}
 
 	return swarm.DirectInstance(m.Run)
@@ -82,6 +146,9 @@ type Matcher struct {
 	// samplerConfig is the global sampler when criteria updates can replace it. Every match
 	// carries it, so a refresh can replace it per process instead of in each of its consumers.
 	samplerConfig *services.SamplerConfig
+	dynamicSpans  map[services.Selector][]dynamicspan.Span
+	spanHandoff   *dynamicSpanHandoff
+	targetPIDs    bool
 }
 
 // ProcessMatch matches a found process with the first selection criteria it fulfilled.
@@ -126,7 +193,7 @@ func (m *Matcher) Run(ctx context.Context) {
 			matches := m.filter(events)
 			m.Log.Debug("processes matching selection criteria", "len", len(matches))
 			if len(matches) > 0 {
-				m.Output.SendCtx(ctx, matches)
+				m.sendMatches(ctx, matches)
 			}
 		}
 	}
@@ -510,9 +577,6 @@ func FindingCriteria(cfg *obi.Config) []services.Selector {
 				Path:      cfg.Exec,
 				OpenPorts: cfg.Port,
 			})
-			for i := range cfg.Discovery.Services {
-				dynamicspan.CopySelectorRegistration(&cfg.Discovery.Services[i], &finderCriteria[i])
-			}
 		}
 		return normalizeRegexCriteria(finderCriteria)
 	}
@@ -528,9 +592,6 @@ func FindingCriteria(cfg *obi.Config) []services.Selector {
 				OpenPorts: cfg.Port,
 				Languages: cfg.AutoTargetLanguage,
 			})
-			for i := range cfg.Discovery.Instrument {
-				dynamicspan.CopySelectorRegistration(&cfg.Discovery.Instrument[i], &finderCriteria[i])
-			}
 		}
 		return NormalizeGlobCriteria(finderCriteria)
 	}

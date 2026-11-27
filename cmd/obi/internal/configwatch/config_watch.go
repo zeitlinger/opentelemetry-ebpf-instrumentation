@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/obi/cmd/obi/internal/configload"
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
@@ -59,8 +60,8 @@ func watchConfigFile(ctx context.Context, path string, previous []byte, refresh 
 			}
 
 			if loaded == nil || !bytes.Equal(loaded.data, data) {
-				cfg, err := loadConfig(data)
-				loaded = &loadedContents{data: data, cfg: cfg, err: err}
+				cfg, plan, err := loadConfigWithRulePlan(data)
+				loaded = &loadedContents{data: data, cfg: cfg, plan: plan, err: err}
 			}
 			if err := refreshConfig(ctx, loaded, refresh); err != nil {
 				if ctx.Err() != nil {
@@ -96,6 +97,7 @@ func watchConfigFile(ctx context.Context, path string, previous []byte, refresh 
 type loadedContents struct {
 	data []byte
 	cfg  *obi.Config
+	plan dynamicspan.RulePlan
 	err  error
 }
 
@@ -103,19 +105,24 @@ func refreshConfig(ctx context.Context, loaded *loadedContents, refresh func(con
 	if loaded.err != nil {
 		return loaded.err
 	}
-	return refresh(ctx, loaded.cfg)
+	return refresh(dynamicspan.WithRulePlan(ctx, loaded.plan), loaded.cfg)
 }
 
 func loadConfig(data []byte) (*obi.Config, error) {
-	cfg, err := configload.LoadV2(data)
+	cfg, _, err := loadConfigWithRulePlan(data)
+	return cfg, err
+}
+
+func loadConfigWithRulePlan(data []byte) (*obi.Config, dynamicspan.RulePlan, error) {
+	cfg, plan, err := configload.LoadV2WithRulePlan(data)
 	if err != nil {
 		if _, ok := errors.AsType[*schema.NotV2Error](err); ok {
-			return nil, errors.New("configuration version changed; restart OBI to apply this configuration")
+			return nil, dynamicspan.RulePlan{}, errors.New("configuration version changed; restart OBI to apply this configuration")
 		}
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
 	if err := cfg.ValidateStaticForApplicationRefresh(); err != nil {
-		return nil, err
+		return nil, dynamicspan.RulePlan{}, err
 	}
-	return cfg, nil
+	return cfg, plan, nil
 }

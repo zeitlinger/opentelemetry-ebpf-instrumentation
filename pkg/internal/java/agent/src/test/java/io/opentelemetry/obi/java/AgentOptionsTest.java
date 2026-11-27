@@ -69,6 +69,7 @@ class AgentOptionsTest {
   void emptyDynamicSpanConfigurationHasNoDeclarations() {
     assertTrue(Agent.parseDynamicSpans(null).isEmpty());
     assertTrue(Agent.parseDynamicSpans("").isEmpty());
+    assertTrue(Agent.optEnabled(Agent.parseArgs("updateDynamicSpans=true"), "updateDynamicSpans"));
   }
 
   @Test

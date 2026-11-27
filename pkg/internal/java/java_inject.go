@@ -282,12 +282,40 @@ func (i *JavaInjector) NewExecutable(ctx context.Context, target InjectionTarget
 		if loaded {
 			// java.net.http.HttpClient was introduced after Java 8.
 			checkPropagation := !jdk8 && i.cfg.EBPF.ContextPropagation.HasHeaders() && supportsHeaderPropagation(i.log)
-			if err := i.verifyLoadedAgent(ctx, attacher, target.Process, target.Pid, checkPropagation); err != nil {
+			if err := i.verifyLoadedAgent(ctx, attacher, target.Process, target.Pid, checkPropagation, target.DynamicSpanUpdate); err != nil {
 				resultChan <- result{err: err}
 				return
 			}
+			if target.DynamicSpanUpdate {
+				i.log.Info("updating dynamic Java spans for attached process", "pid", target.Pid)
+				if err := verifyTargetIdentity(target); err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+				root, err := target.Process.Open("root", unix.O_PATH|unix.O_DIRECTORY)
+				if err != nil {
+					resultChan <- result{err: fmt.Errorf("opening root of process %d: %w", target.Pid, err)}
+					return
+				}
+				agentPath, copyErr := i.copyAgent(fmt.Sprintf("/proc/self/fd/%d", root.Fd()), target.Pid, target.TempDirEnv)
+				closeErr := root.Close()
+				if copyErr != nil {
+					resultChan <- result{err: copyErr}
+					return
+				}
+				if closeErr != nil {
+					resultChan <- result{err: fmt.Errorf("closing root of process %d: %w", target.Pid, closeErr)}
+					return
+				}
+				if err := i.attachJDKAgent(ctx, attacher, target.Process, target.Pid, agentPath, i.dynamicSpanUpdateOpts(target.DynamicSpans)); err != nil {
+					resultChan <- result{err: err}
+					return
+				}
+			}
 
-			i.log.Info("OpenTelemetry eBPF Java Agent already loaded, not reloading")
+			if !target.DynamicSpanUpdate {
+				i.log.Info("OpenTelemetry eBPF Java Agent already loaded, not reloading")
+			}
 			resultChan <- result{attached: false}
 			return
 		}
@@ -482,14 +510,8 @@ func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool, dynamicSpans []dyn
 		opts = append(opts, fmt.Sprintf("runtimeMetricsIntervalNanos=%d",
 			i.cfg.JVMRuntimeMetrics.SamplingInterval.Nanoseconds()))
 	}
-	if len(dynamicSpans) > 0 {
-		records := make([]string, 0, len(dynamicSpans))
-		for _, span := range dynamicSpans {
-			name := base64.RawURLEncoding.EncodeToString([]byte(span.Name))
-			reference := base64.RawURLEncoding.EncodeToString([]byte(span.FunctionReference))
-			records = append(records, name+"."+reference)
-		}
-		opts = append(opts, "dynamicSpans="+strings.Join(records, "~"))
+	if encoded := encodeDynamicSpans(dynamicSpans); encoded != "" {
+		opts = append(opts, "dynamicSpans="+encoded)
 	}
 
 	if len(opts) == 0 {
@@ -497,6 +519,27 @@ func (i *JavaInjector) attachOpts(runtimeMetricsEnabled bool, dynamicSpans []dyn
 	}
 
 	return "=" + strings.Join(opts, ",")
+}
+
+func (i *JavaInjector) dynamicSpanUpdateOpts(dynamicSpans []dynamicspan.Span) string {
+	encoded := encodeDynamicSpans(dynamicSpans)
+	if encoded == "" {
+		return "=updateDynamicSpans=true"
+	}
+	return "=dynamicSpans=" + encoded + ",updateDynamicSpans=true"
+}
+
+func encodeDynamicSpans(dynamicSpans []dynamicspan.Span) string {
+	if len(dynamicSpans) == 0 {
+		return ""
+	}
+	records := make([]string, 0, len(dynamicSpans))
+	for _, span := range dynamicSpans {
+		name := base64.RawURLEncoding.EncodeToString([]byte(span.Name))
+		reference := base64.RawURLEncoding.EncodeToString([]byte(span.FunctionReference))
+		records = append(records, name+"."+reference)
+	}
+	return strings.Join(records, "~")
 }
 
 func (i *JavaInjector) attachJDKAgent(
@@ -649,13 +692,14 @@ func (i *JavaInjector) verifyLoadedAgent(
 	process *procs.ProcessHandle,
 	pid app.PID,
 	checkPropagation bool,
+	checkDynamicSpanUpdate bool,
 ) error {
 	agentVersion := i.embeddedAgentVersion()
-	if agentVersion == "" && !checkPropagation {
+	if agentVersion == "" && !checkPropagation && !checkDynamicSpanUpdate {
 		return nil
 	}
 
-	version, capability, asyncCapability, err := i.loadedAgentProperties(ctx, attacher, process, pid)
+	version, capability, asyncCapability, dynamicSpanUpdate, err := i.loadedAgentProperties(ctx, attacher, process, pid)
 	if agentVersion != "" {
 		if err != nil {
 			return err
@@ -676,6 +720,9 @@ func (i *JavaInjector) verifyLoadedAgent(
 			i.log.Debug("HTTPS HttpClient.sendAsync header injection path available; individual requests may still be excluded or skipped",
 				"pid", pid, "configured_header_propagation", true, "effective", "available", "protocol", "HTTP/1.1")
 		}
+	}
+	if checkDynamicSpanUpdate && (err != nil || dynamicSpanUpdate != "true") {
+		return &JavaInjectError{Message: "the loaded OpenTelemetry eBPF Java Agent does not support live dynamic-span updates; restart the JVM with a compatible agent"}
 	}
 	return nil
 }
@@ -704,7 +751,7 @@ func (i *JavaInjector) loadedAgentProperties(
 	attacher jvmAttacher,
 	process *procs.ProcessHandle,
 	pid app.PID,
-) (string, string, string, error) {
+) (string, string, string, string, error) {
 	attacher.Init()
 
 	defer func() {
@@ -716,28 +763,32 @@ func (i *JavaInjector) loadedAgentProperties(
 	out, err := attacher.Attach(ctx, process, []string{"jcmd", "VM.system_properties"}, true)
 	if err != nil {
 		i.log.Error("error executing command for the JVM", "pid", pid, "error", err)
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 
 	if out == nil {
-		return "", "", "", nil
+		return "", "", "", "", nil
 	}
 	defer out.Close()
 
 	properties, err := io.ReadAll(out)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	version, err := javaProperty(bytes.NewReader(properties), agentVersionProperty)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	capability, err := javaProperty(bytes.NewReader(properties), httpClientPropagationProperty)
 	if err != nil {
-		return version, "", "", err
+		return version, "", "", "", err
 	}
 	asyncCapability, err := javaProperty(bytes.NewReader(properties), httpClientAsyncPropagationProperty)
-	return version, capability, asyncCapability, err
+	if err != nil {
+		return version, capability, "", "", err
+	}
+	dynamicSpanUpdate, err := javaProperty(bytes.NewReader(properties), dynamicSpanUpdateProperty)
+	return version, capability, asyncCapability, dynamicSpanUpdate, err
 }
 
 func (i *JavaInjector) verifyJVMVersion(

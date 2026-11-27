@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -26,6 +25,7 @@ type InjectionTarget struct {
 	Pid                   app.PID
 	RuntimeMetricsEnabled bool
 	DynamicSpans          []dynamicspan.Span
+	DynamicSpanUpdate     bool
 	// TempDirEnv is the process' TMPDIR, empty when it does not set one.
 	TempDirEnv string
 	// StartTime pins the target to one incarnation of Pid. Injection is queued
@@ -40,7 +40,7 @@ type InjectionTarget struct {
 // InjectionTargetFrom acquires a stable reference to the process incarnation
 // inspected by discovery. The caller owns the returned target and must close
 // it if it is not handed to the injection queue.
-func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
+func InjectionTargetFrom(ie *ebpf.Instrumentable, spans []dynamicspan.Span) (InjectionTarget, error) {
 	pid := ie.FileInfo.Pid()
 	startTime := ie.FileInfo.StartTime()
 	process, err := openProcessHandle(pid, startTime)
@@ -52,7 +52,7 @@ func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
 		Type:                  ie.Type,
 		Pid:                   pid,
 		RuntimeMetricsEnabled: ie.FileInfo.ServiceAttrs().Features.AppRuntime(),
-		DynamicSpans:          dynamicspanstate.ForFile(ie.FileInfo),
+		DynamicSpans:          spans,
 		TempDirEnv:            ie.FileInfo.ServiceAttrs().EnvVars["TMPDIR"],
 		StartTime:             startTime,
 		Process:               process,

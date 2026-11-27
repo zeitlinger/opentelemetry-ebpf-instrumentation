@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app/request"
 	"go.opentelemetry.io/obi/pkg/appolly/services"
 	"go.opentelemetry.io/obi/pkg/ebpf"
@@ -155,13 +156,15 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 	), swarm.WithID("LanguageDecoratorProvider"))
 
 	criteriaFilteredEvents := msgh.QueueFromConfig[[]Event[ProcessMatch]](pf.cfg, pf.ctxInfo.Metrics, "criteriaFilteredEvents")
-	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicSelector, updates),
+	spanHandoff := newDynamicSpanHandoff()
+	swi.Add(criteriaMatcherProvider(pf.cfg, langEnrichedEvents, criteriaFilteredEvents, configCriteria, startConfig.dynamicSelector, updates,
+		criteriaSpanOptions{handoff: spanHandoff, plan: dynamicspan.RulePlanFromContext(ctx)}),
 		swarm.WithID("CriteriaMatcher"))
 	swi.Add(dynamicMatcherProvider(langEnrichedEvents, criteriaFilteredEvents, appDynamicSelector),
 		swarm.WithID("DynamicMatcher"))
 
 	executableTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "executableTypes")
-	swi.Add(ExecTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes),
+	swi.Add(execTyperProvider(pf.cfg, pf.ctxInfo.Metrics, pf.ctxInfo.K8sInformer, criteriaFilteredEvents, executableTypes, spanHandoff),
 		swarm.WithID("ExecTyper"))
 
 	processContextEnrichedTypes := msgh.QueueFromConfig[[]Event[ebpf.Instrumentable]](pf.cfg, pf.ctxInfo.Metrics, "processContextEnrichedTypes")
@@ -181,6 +184,7 @@ func (pf *ProcessFinder) Start(ctx context.Context, opts ...ProcessFinderStartOp
 		SpanSignalsShortcut: pf.tracesInput,
 		RuntimeMetrics:      pf.runtimeMetrics,
 		DynamicSelector:     startConfig.dynamicSelector,
+		spanHandoff:         spanHandoff,
 
 		InputInstrumentables: storedExecutableTypes,
 		EbpfEventContext:     pf.ebpfEventContext,

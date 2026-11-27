@@ -21,7 +21,6 @@ import (
 	nodejsconfig "go.opentelemetry.io/obi/internal/config/nodejs"
 	"go.opentelemetry.io/obi/pkg/appolly/app/svc"
 	"go.opentelemetry.io/obi/pkg/ebpf"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/netns"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -52,31 +51,16 @@ func NewNodeInjector(cfg *obi.Config) *NodeInjector {
 // unless nodejs.enabled, the global opt-out, is set to false.
 func (i *NodeInjector) Enabled() bool {
 	return i.cfg.NodeJS.Enabled &&
-		(i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() || i.cfg.AppRuntimeMetricsEnabled() ||
-			i.hasConfiguredDynamicSpans())
-}
-
-func (i *NodeInjector) hasConfiguredDynamicSpans() bool {
-	for idx := range i.cfg.Discovery.Instrument {
-		if len(dynamicspan.ForSelector(&i.cfg.Discovery.Instrument[idx])) > 0 {
-			return true
-		}
-	}
-	for idx := range i.cfg.Discovery.Services {
-		if len(dynamicspan.ForSelector(&i.cfg.Discovery.Services[idx])) > 0 {
-			return true
-		}
-	}
-	return false
+		(i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() || i.cfg.AppRuntimeMetricsEnabled())
 }
 
 // injectionTrigger names what turned the injection on, so the logs explain a
 // metrics-only injection.
-func (i *NodeInjector) injectionTrigger() string {
+func (i *NodeInjector) injectionTrigger(target InjectionTarget) string {
 	if i.cfg.Traces.Enabled() || i.cfg.TracePrinter.Enabled() {
 		return "traces"
 	}
-	if i.hasConfiguredDynamicSpans() {
+	if target.DynamicSpanUpdate || len(target.DynamicSpans) > 0 {
 		return "dynamic spans"
 	}
 	return "runtime metrics"
@@ -85,8 +69,8 @@ func (i *NodeInjector) injectionTrigger() string {
 // Accepts reports whether this instrumentable is a Node.js process the
 // injector is configured to handle. Callers that defer the injection check it
 // before taking a queue slot.
-func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable) bool {
-	if !i.Enabled() {
+func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable, spans []dynamicspan.Span) bool {
+	if !i.cfg.NodeJS.Enabled {
 		i.log.Debug("Node Injector is disabled")
 		return false
 	}
@@ -95,7 +79,7 @@ func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable) bool {
 		i.log.Debug("not a NodeJS executable")
 		return false
 	}
-	if !i.cfg.Traces.Enabled() && !i.cfg.TracePrinter.Enabled() && !i.cfg.AppRuntimeMetricsEnabled() && len(dynamicspanstate.ForFile(ie.FileInfo)) == 0 {
+	if !i.cfg.Traces.Enabled() && !i.cfg.TracePrinter.Enabled() && !i.cfg.AppRuntimeMetricsEnabled() && len(spans) == 0 {
 		i.log.Debug("Node.js process has no matching dynamic spans")
 		return false
 	}
@@ -103,8 +87,22 @@ func (i *NodeInjector) Accepts(ie *ebpf.Instrumentable) bool {
 	return true
 }
 
+// AcceptsDynamicSpanUpdate permits an authoritative update even when its
+// desired list is empty, while retaining the runtime and global opt-out gates.
+func (i *NodeInjector) AcceptsDynamicSpanUpdate(ie *ebpf.Instrumentable) bool {
+	return i.cfg.NodeJS.Enabled && ie.Type == svc.InstrumentableNodejs
+}
+
 const skippingInjection = "skipping Node.js agent injection. Trace-context propagation and " +
 	"Node.js runtime metrics will not work"
+
+func (i *NodeInjector) logSkipping(target InjectionTarget, reason string) {
+	if target.DynamicSpanUpdate {
+		i.log.Warn("skipping Node.js dynamic span update", "pid", target.Pid, "reason", reason)
+		return
+	}
+	i.log.Warn(skippingInjection, "pid", target.Pid, "reason", reason)
+}
 
 // Inject injects into an accepted target.
 //
@@ -117,7 +115,7 @@ const skippingInjection = "skipping Node.js agent injection. Trace-context propa
 // signal — the one injected.
 func (i *NodeInjector) Inject(ctx context.Context, target InjectionTarget) {
 	pid := target.Pid
-	i.log.Debug("loading NodeJS instrumentation", "pid", pid, "trigger", i.injectionTrigger())
+	i.log.Debug("loading NodeJS instrumentation", "pid", pid, "trigger", i.injectionTrigger(target))
 
 	if err := target.Process.Alive(); err != nil {
 		i.log.Debug("NodeJS process is gone, skipping injection", "pid", pid, "error", err)
@@ -139,13 +137,17 @@ func (i *NodeInjector) Inject(ctx context.Context, target InjectionTarget) {
 	defer elfFile.Close()
 
 	if reason := i.runtimeRefusal(target, elfFile); reason != "" {
-		i.log.Warn(skippingInjection, "pid", pid, "reason", reason)
+		i.logSkipping(target, reason)
 		return
 	}
 
 	if err := i.attachAgent(ctx, target, elfFile); err != nil {
 		i.log.Error("couldn't attach NodeJS injector", "pid", pid, "error", err)
-		i.log.Error("trace-context propagation and nodejs runtime metrics will not work for NodeJS services!")
+		if target.DynamicSpanUpdate {
+			i.log.Error("Node.js dynamic spans will not be updated", "pid", pid)
+		} else {
+			i.log.Error("trace-context propagation and nodejs runtime metrics will not work for NodeJS services!")
+		}
 	}
 }
 
@@ -159,7 +161,7 @@ func (i *NodeInjector) Inject(ctx context.Context, target InjectionTarget) {
 func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, elfFile *elf.File) error {
 	pid := int(target.Pid)
 
-	injected, err := i.injectViaOpenInspector(pid, target.DynamicSpans)
+	injected, err := i.injectViaOpenInspector(pid, target.DynamicSpans, target.DynamicSpanUpdate)
 	if injected || err != nil {
 		return err
 	}
@@ -173,7 +175,7 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 	}
 
 	if reason != "" {
-		i.log.Warn(skippingInjection, "pid", pid, "reason", reason)
+		i.logSkipping(target, reason)
 		return nil
 	}
 
@@ -188,7 +190,7 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 		}
 
 		// SIGUSR1 opened this port, so this injection closes it again.
-		return i.injectViaConn(conn, true, target.DynamicSpans)
+		return i.injectViaConn(conn, true, target.DynamicSpans, target.DynamicSpanUpdate)
 	})
 }
 
@@ -197,7 +199,7 @@ func (i *NodeInjector) attachAgent(ctx context.Context, target InjectionTarget, 
 // value reports whether the injection was carried out.
 //
 // The port was the application's before OBI connected, so it is left open.
-func (i *NodeInjector) injectViaOpenInspector(pid int, dynamicSpans []dynamicspan.Span) (bool, error) {
+func (i *NodeInjector) injectViaOpenInspector(pid int, dynamicSpans []dynamicspan.Span, update bool) (bool, error) {
 	injected := false
 
 	err := netns.WithNetNS(pid, func() error {
@@ -215,7 +217,7 @@ func (i *NodeInjector) injectViaOpenInspector(pid int, dynamicSpans []dynamicspa
 
 		i.log.Debug("Node.js inspector already open, injecting directly", "pid", pid)
 		injected = true
-		return i.injectViaConn(conn, false, dynamicSpans)
+		return i.injectViaConn(conn, false, dynamicSpans, update)
 	})
 
 	return injected, err
@@ -257,7 +259,7 @@ func (i *NodeInjector) runtimeRefusal(target InjectionTarget, elfFile *elf.File)
 			node13Backport.Original(), minInjectableVersion.Original())
 	}
 
-	if (i.cfg.NodeJS.ManualSpans || len(target.DynamicSpans) > 0) && !supportsManualSpans(nodeVersion) {
+	if (i.cfg.NodeJS.ManualSpans || len(target.DynamicSpans) > 0 || target.DynamicSpanUpdate) && !supportsManualSpans(nodeVersion) {
 		return fmt.Sprintf(refusalManualSpansTooOld,
 			minManualSpansVersion.Original(), nodeVersion.Original())
 	}
@@ -405,4 +407,22 @@ func (i *NodeInjector) dynamicSpanCode(dynamicSpans []dynamicspan.Span) string {
 		return ""
 	}
 	return strings.Replace(_dynamicSpansCode, "__OBI_DYNAMIC_SPAN_RULES__", string(encoded), 1)
+}
+
+// dynamicSpanUpdateCode applies an authoritative replacement to an existing
+// dynamic-span runtime. If this is the process's first attach, install the
+// regular bootstrap instead so the bridge and module hook exist as well.
+func (i *NodeInjector) dynamicSpanUpdateCode(dynamicSpans []dynamicspan.Span, bootstrap string) string {
+	stateKey := "Symbol.for('obi.dynamicSpanState')"
+	update := i.dynamicSpanCode(dynamicSpans)
+	if update == "" {
+		update = strings.Replace(_dynamicSpansCode, "__OBI_DYNAMIC_SPAN_RULES__", "[]", 1)
+	}
+	if len(dynamicSpans) == 0 {
+		// An empty update with no runtime state has nothing to clear, and must
+		// not install the bridge or module hook as a side effect.
+		return "(() => { const state = globalThis[" + stateKey + "]; if (state) { " + update + "; } })()"
+	}
+	return "(() => { const state = globalThis[" + stateKey + "]; if (state) { " + update +
+		"; } else { " + bootstrap + "; } })()"
 }

@@ -9,7 +9,6 @@ import (
 	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/app"
 	"go.opentelemetry.io/obi/pkg/ebpf"
-	"go.opentelemetry.io/obi/pkg/internal/dynamicspanstate"
 	"go.opentelemetry.io/obi/pkg/internal/procs"
 )
 
@@ -24,12 +23,15 @@ type InjectionTarget struct {
 	Pid          app.PID
 	Process      *procs.ProcessHandle
 	DynamicSpans []dynamicspan.Span
+	// DynamicSpanUpdate marks this injection as an authoritative replacement,
+	// including when DynamicSpans is empty.
+	DynamicSpanUpdate bool
 }
 
 // InjectionTargetFrom pins the process inspected by discovery. The caller owns
 // the returned target and must close it if it is not handed to the injection
 // queue.
-func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
+func InjectionTargetFrom(ie *ebpf.Instrumentable, spans []dynamicspan.Span) (InjectionTarget, error) {
 	pid := ie.FileInfo.Pid()
 	process, err := openProcessHandle(pid, ie.FileInfo.StartTime())
 	if err != nil {
@@ -39,7 +41,7 @@ func InjectionTargetFrom(ie *ebpf.Instrumentable) (InjectionTarget, error) {
 	return InjectionTarget{
 		Pid:          pid,
 		Process:      process,
-		DynamicSpans: dynamicspanstate.ForFile(ie.FileInfo),
+		DynamicSpans: spans,
 	}, nil
 }
 

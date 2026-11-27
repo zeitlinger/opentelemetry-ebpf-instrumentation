@@ -18,6 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
@@ -39,6 +40,54 @@ extensions:
       logging:
         debug_trace_output: text
 `, port)
+}
+
+func TestConfigWatcherPassesOrderedRulePlanAndClearsIt(t *testing.T) {
+	spanConfig := func(span bool) []byte {
+		if !span {
+			return watcherConfig(9090)
+		}
+		return []byte(`file_format: "1.0"
+extensions:
+  obi:
+    version: "2.0"
+    capture:
+      policy: {default_action: exclude}
+      rules:
+        - action: include
+          match: {process: {open_ports: 9090}}
+          refine:
+            spans/development:
+              - name: example
+                on: {function: "com.example.Foo#bar"}
+    daemon:
+      logging:
+        debug_trace_output: text
+`)
+	}
+	path := filepath.Join(t.TempDir(), "obi.yml")
+	initial := watcherConfig(8080)
+	changed := spanConfig(true)
+	if _, err := loadConfig(changed); err != nil {
+		t.Fatalf("dynamic span refresh config invalid: %v", err)
+	}
+	require.NoError(t, os.WriteFile(path, changed, 0o600))
+	ticks := make(chan time.Time, 4)
+	for range cap(ticks) {
+		ticks <- time.Now()
+	}
+	close(ticks)
+	plans := make([]dynamicspan.RulePlan, 0, 2)
+	watchConfigFile(t.Context(), path, initial, func(ctx context.Context, _ *obi.Config) error {
+		plans = append(plans, dynamicspan.RulePlanFromContext(ctx))
+		if len(plans) == 1 {
+			return os.WriteFile(path, spanConfig(false), 0o600)
+		}
+		return nil
+	}, slog.New(configWatchLog{records: make(chan slog.Record, 2)}), ticks)
+	require.Len(t, plans, 2)
+	require.Equal(t, [][]dynamicspan.Span{{{Name: "example", FunctionReference: "com.example.Foo#bar"}}}, plans[0].Glob)
+	require.Empty(t, plans[1], "clear updates must shadow the prior plan")
 }
 
 type configWatchLog struct {

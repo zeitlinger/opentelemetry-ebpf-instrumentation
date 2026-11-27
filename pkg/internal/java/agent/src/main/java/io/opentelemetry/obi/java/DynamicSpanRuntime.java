@@ -44,14 +44,21 @@ public final class DynamicSpanRuntime {
   private DynamicSpanRuntime() {}
 
   public static void configure(List<DynamicSpanDefinition> configured, Instrumentation inst) {
-    if (configured == null || configured.isEmpty()) {
-      return;
-    }
     synchronized (LOCK) {
-      definitions = Collections.unmodifiableList(new ArrayList<>(configured));
+      boolean wasConfigured = !definitions.isEmpty();
+      definitions =
+          configured == null
+              ? Collections.emptyList()
+              : Collections.unmodifiableList(new ArrayList<>(configured));
       instrumentation = inst;
+      if (definitions.isEmpty() && !wasConfigured) {
+        return;
+      }
       refresh();
-      if (refresher == null) {
+      if (definitions.isEmpty() && refresher != null) {
+        refresher.shutdownNow();
+        refresher = null;
+      } else if (refresher == null) {
         refresher =
             Executors.newSingleThreadScheduledExecutor(
                 runnable -> {
@@ -62,6 +69,10 @@ public final class DynamicSpanRuntime {
         refresher.scheduleWithFixedDelay(DynamicSpanRuntime::refreshSafely, 1, 1, TimeUnit.SECONDS);
       }
     }
+  }
+
+  public static List<DynamicSpanDefinition> definitions() {
+    return definitions;
   }
 
   private static void refreshSafely() {
@@ -128,7 +139,8 @@ public final class DynamicSpanRuntime {
       stillLoaded.add(type);
       String desired = transformationSignature(type, resolved);
       String previous = desiredTransformations.put(type, desired);
-      if (previous != null && !previous.equals(desired)) {
+      if ((previous == null && !desired.isEmpty())
+          || (previous != null && !previous.equals(desired))) {
         retransform.add(type);
       }
     }

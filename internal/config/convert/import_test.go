@@ -53,12 +53,12 @@ extensions:
 `
 			_, extension, err := schema.ParseStandaloneYAML([]byte(config))
 			require.NoError(t, err)
-			converted, err := V2ToRuntime(extension)
+			converted, plan, err := V2ToRuntimeWithRulePlan(extension)
 			require.NoError(t, err)
 			var dynamicSelector *services.GlobAttributes
 			var spans []dynamicspan.Span
 			for i := range converted.Discovery.Instrument {
-				if configured := dynamicspan.ForSelector(&converted.Discovery.Instrument[i]); len(configured) > 0 {
+				if configured := plan.Glob[i]; len(configured) > 0 {
 					dynamicSelector = &converted.Discovery.Instrument[i]
 					spans = configured
 					break
@@ -93,12 +93,12 @@ extensions:
 `
 		_, extension, err := schema.ParseStandaloneYAML([]byte(config))
 		require.NoError(t, err)
-		converted, err := V2ToRuntime(extension)
+		converted, plan, err := V2ToRuntimeWithRulePlan(extension)
 		require.NoError(t, err)
 		var dynamicSelector *services.GlobAttributes
 		var spans []dynamicspan.Span
 		for i := range converted.Discovery.Instrument {
-			if configured := dynamicspan.ForSelector(&converted.Discovery.Instrument[i]); len(configured) > 0 {
+			if configured := plan.Glob[i]; len(configured) > 0 {
 				dynamicSelector = &converted.Discovery.Instrument[i]
 				spans = configured
 				break
@@ -112,7 +112,7 @@ extensions:
 	}
 }
 
-func TestV2DynamicSpanSidecarsFollowRuleOrderingAndDefaultInsert(t *testing.T) {
+func TestV2DynamicSpanPlanFollowsRuleOrderingAndDefaultInsert(t *testing.T) {
 	config := `file_format: "1.0"
 extensions:
   obi:
@@ -137,7 +137,7 @@ extensions:
 `
 	_, extension, err := schema.ParseStandaloneYAML([]byte(config))
 	require.NoError(t, err)
-	converted, err := V2ToRuntime(extension)
+	converted, plan, err := V2ToRuntimeWithRulePlan(extension)
 	require.NoError(t, err)
 
 	got := map[string][]dynamicspan.Span{}
@@ -145,11 +145,11 @@ extensions:
 		selector := &converted.Discovery.Instrument[i]
 		switch {
 		case selector.Path.MatchString("/first/app"):
-			got["first"] = dynamicspan.ForSelector(selector)
+			got["first"] = plan.Glob[i]
 		case selector.Path.MatchString("/second/app"):
-			got["second"] = dynamicspan.ForSelector(selector)
+			got["second"] = plan.Glob[i]
 		case selector.Path.MatchString("/other/app"):
-			require.Empty(t, dynamicspan.ForSelector(selector), "default include must not inherit a rule's spans")
+			require.Empty(t, plan.Glob[i], "default include must not inherit a rule's spans")
 		}
 	}
 	require.Equal(t, []dynamicspan.Span{{Name: "first", FunctionReference: "com.example.First#run"}}, got["first"])

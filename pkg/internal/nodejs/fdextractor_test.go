@@ -107,6 +107,9 @@ func TestAgentCodeCarriesOnlySelectedDynamicSpans(t *testing.T) {
 	unselectedCode := injector.agentCodeForSpans(nil)
 	require.NotContains(t, unselectedCode, "dynamic_spans.js")
 	require.NotContains(t, unselectedCode, "checkout.place_order")
+	emptyUpdate := injector.dynamicSpanUpdateCode(nil, "bootstrap")
+	require.Contains(t, emptyUpdate, "obi.dynamicSpanState")
+	require.NotContains(t, emptyUpdate, "bootstrap", "empty update must not install an agent on a fresh process")
 
 	manualSpansCode := (&NodeInjector{cfg: &obi.Config{
 		NodeJS: obi.NodeJSConfig{ManualSpans: true},

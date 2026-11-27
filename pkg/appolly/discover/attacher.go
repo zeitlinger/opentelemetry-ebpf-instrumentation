@@ -87,6 +87,7 @@ type traceAttacher struct {
 	processAgeFunc func(app.PID) time.Duration
 
 	DynamicSelector *DynamicSelector
+	spanHandoff     *dynamicSpanHandoff
 
 	// processResourceDetector finds resources like the service.name, service.namespace and service.version,
 	// from the process binary or the process deployment directory.
@@ -163,18 +164,28 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 			// Sampler updates wait for the rest of their batch, so a worker whose master
 			// leaves in the same refresh no longer defers to that master's update.
 			var updates []*ebpf.Instrumentable
-			for _, instr := range instrumentables {
+			for i := range instrumentables {
+				instr := instrumentables[i]
+				spanTarget, hasSpanTarget := dynamicSpanTarget{}, false
+				if ta.spanHandoff != nil {
+					spanTarget, hasSpanTarget = ta.spanHandoff.takeInstrumentable(&instrumentables[i].Obj)
+				}
 				ta.log.Debug("Instrumentable", "created", instr.Type, "type", instr.Obj.Type,
 					"exec", instr.Obj.FileInfo.CmdExePath(), "pid", instr.Obj.FileInfo.Pid())
 				switch instr.Type {
 				case EventUpdated:
-					updates = append(updates, &instr.Obj)
+					if !hasSpanTarget || !spanTarget.update || spanTarget.samplerUpdate {
+						updates = append(updates, &instr.Obj)
+					}
+					if hasSpanTarget && spanTarget.update {
+						ta.enqueueDynamicSpanUpdate(ctx, &instr.Obj, spanTarget, javaInjections, nodeInjections)
+					}
 				case EventCreated:
 					ta.resolveServiceMetadata(&instr.Obj)
 
 					var nodeTarget *nodejs.InjectionTarget
-					if nodeInjections != nil && ta.nodeInjector.Accepts(&instr.Obj) {
-						target, err := nodejs.InjectionTargetFrom(&instr.Obj)
+					if nodeInjections != nil && ta.nodeInjector.Accepts(&instr.Obj, spanTarget.spans) {
+						target, err := nodejs.InjectionTargetFrom(&instr.Obj, spanTarget.spans)
 						if err != nil {
 							ta.log.Warn("unable to capture stable node injection target, "+
 								"Node.js trace correlation and runtime metrics will not work",
@@ -186,7 +197,7 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 
 					var javaTarget *javaagent.InjectionTarget
 					if javaInjections != nil && instr.Obj.Type == svc.InstrumentableJava {
-						target, err := javaagent.InjectionTargetFrom(&instr.Obj)
+						target, err := javaagent.InjectionTargetFrom(&instr.Obj, spanTarget.spans)
 						if err != nil {
 							ta.log.Warn("unable to capture stable java injection target, Java TLS telemetry will not work",
 								"pid", instr.Obj.FileInfo.Pid(), "error", err)
@@ -226,6 +237,9 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 						_ = instr.Obj.FileInfo.ELF().Close()
 					}
 				case EventDeleted:
+					if hasSpanTarget && spanTarget.update {
+						ta.enqueueDynamicSpanUpdate(ctx, &instr.Obj, spanTarget, javaInjections, nodeInjections)
+					}
 					if dotnetSessions != nil {
 						dotnetSessions.Remove(instr.Obj.FileInfo)
 					}
@@ -238,6 +252,33 @@ func (ta *traceAttacher) attacherLoop(_ context.Context) (swarm.RunFunc, error) 
 			}
 		})
 	}, nil
+}
+
+func (ta *traceAttacher) enqueueDynamicSpanUpdate(
+	ctx context.Context,
+	instrumentable *ebpf.Instrumentable,
+	spanTarget dynamicSpanTarget,
+	javaInjections *injectionQueue[javaagent.InjectionTarget],
+	nodeInjections *injectionQueue[nodejs.InjectionTarget],
+) {
+	if javaInjections != nil && instrumentable.Type == svc.InstrumentableJava {
+		target, err := javaagent.InjectionTargetFrom(instrumentable, spanTarget.spans)
+		if err != nil {
+			ta.log.Warn("unable to capture stable java span update target", "pid", instrumentable.FileInfo.Pid(), "error", err)
+		} else {
+			target.DynamicSpanUpdate = true
+			javaInjections.enqueueUpdate(ctx, target)
+		}
+	}
+	if nodeInjections != nil && ta.nodeInjector.AcceptsDynamicSpanUpdate(instrumentable) {
+		target, err := nodejs.InjectionTargetFrom(instrumentable, spanTarget.spans)
+		if err != nil {
+			ta.log.Warn("unable to capture stable node span update target", "pid", instrumentable.FileInfo.Pid(), "error", err)
+		} else {
+			target.DynamicSpanUpdate = true
+			nodeInjections.enqueueUpdate(ctx, target)
+		}
+	}
 }
 
 func syncServiceMetadata(dst, src *exec.FileInfo) {

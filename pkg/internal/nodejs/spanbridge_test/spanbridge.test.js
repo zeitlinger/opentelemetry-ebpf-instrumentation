@@ -207,6 +207,11 @@ test('dynamic function spans wrap already-loaded and late-loaded CommonJS export
   assert.strictEqual(failed.attrs['exception.message'], 'expected failure');
 });
 
+test('dynamic function span rules replace, clear, and remain idempotent on retained references', () => {
+  const result = runScript('scenario_dynamic_replace.js');
+  assert.deepStrictEqual(result.emitted, ['first', 'second', 'second']);
+});
+
 test('dynamic spans do not enable application API span capture without ManualSpans', () => {
   const result = runScript('scenario_dynamic_spans.js', 'dynamic-only');
   assert.ok(!result.spans.some((span) => span.name === 'manual.disabled'));
@@ -254,10 +259,10 @@ test('dynamic function spans use an application SDK when one already owns the AP
   );
 });
 
-test('dynamic span injection is idempotent and can add rules on reinjection', () => {
+test('dynamic span injection replaces rules on reinjection without duplicating wrappers', () => {
   const result = runScript('scenario_dynamic_spans.js', 'reinject-dynamic');
   const names = result.spans.map((span) => span.name);
-  assert.strictEqual(names.filter((name) => name === 'dynamic.sync').length, 1);
+  assert.strictEqual(names.filter((name) => name === 'dynamic.sync').length, 0);
   assert.strictEqual(names.filter((name) => name === 'dynamic.sync.additional').length, 1);
   assert.strictEqual(result.callableProxyPrototypeTrapsAfterReinjection, 0);
 });

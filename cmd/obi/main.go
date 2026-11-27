@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/obi/cmd/obi/internal/configcmd"
 	"go.opentelemetry.io/obi/cmd/obi/internal/configload"
 	"go.opentelemetry.io/obi/cmd/obi/internal/configwatch"
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/internal/config/schema"
 	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/buildinfo"
@@ -38,6 +39,11 @@ const (
 )
 
 func loadConfig(configPath *string) (*obi.Config, string, []byte) {
+	cfg, version, data, _ := loadConfigWithRulePlan(configPath)
+	return cfg, version, data
+}
+
+func loadConfigWithRulePlan(configPath *string) (*obi.Config, string, []byte, dynamicspan.RulePlan) {
 	var configReader io.ReadCloser
 	if configPath != nil && *configPath != "" {
 		var err error
@@ -53,33 +59,37 @@ func loadConfig(configPath *string) (*obi.Config, string, []byte) {
 	if configReader != nil {
 		reader = io.TeeReader(configReader, &configData)
 	}
-	config, version, err := loadConfigReader(reader)
+	config, version, plan, err := loadConfigReaderWithRulePlan(reader)
 	if err != nil {
 		slog.Error("wrong configuration", "error", err)
 		//nolint:gocritic
 		os.Exit(-1)
 	}
-	return config, version, configData.Bytes()
+	return config, version, configData.Bytes(), plan
 }
 
 func loadConfigReader(file io.Reader) (*obi.Config, string, error) {
+	cfg, version, _, err := loadConfigReaderWithRulePlan(file)
+	return cfg, version, err
+}
+
+func loadConfigReaderWithRulePlan(file io.Reader) (*obi.Config, string, dynamicspan.RulePlan, error) {
 	var data []byte
 	fileProvided := file != nil
 	if fileProvided {
 		var err error
 		data, err = io.ReadAll(file)
 		if err != nil {
-			return nil, "", fmt.Errorf("reading configuration: %w", err)
+			return nil, "", dynamicspan.RulePlan{}, fmt.Errorf("reading configuration: %w", err)
 		}
 	}
 
-	config, err := configload.LoadV2(data)
+	config, plan, err := configload.LoadV2WithRulePlan(data)
 	if err == nil {
-		return config, configVersionV2, nil
+		return config, configVersionV2, plan, nil
 	}
-
 	if _, ok := errors.AsType[*schema.NotV2Error](err); !ok {
-		return nil, "", err
+		return nil, "", dynamicspan.RulePlan{}, err
 	}
 
 	var legacyReader io.Reader
@@ -88,9 +98,9 @@ func loadConfigReader(file io.Reader) (*obi.Config, string, error) {
 	}
 	config, err = obi.LoadConfig(legacyReader)
 	if err != nil {
-		return nil, "", fmt.Errorf("loading config v1: %w", err)
+		return nil, "", dynamicspan.RulePlan{}, fmt.Errorf("loading config v1: %w", err)
 	}
-	return config, configVersionV1, nil
+	return config, configVersionV1, dynamicspan.RulePlan{}, nil
 }
 
 func main() {
@@ -110,7 +120,7 @@ func main() {
 	if cfg := os.Getenv("OTEL_EBPF_CONFIG_PATH"); cfg != "" {
 		configPath = &cfg
 	}
-	config, configVersion, configData := loadConfig(configPath)
+	config, configVersion, configData, rulePlan := loadConfigWithRulePlan(configPath)
 	if err := lvl.UnmarshalText([]byte(config.LogLevel)); err != nil {
 		slog.Error("unknown log level specified, choices are [DEBUG, INFO, WARN, ERROR]", "error", err)
 		os.Exit(-1)
@@ -169,6 +179,9 @@ func main() {
 	// We must register the hook before we launch the pipe build, otherwise we won't clean up if the
 	// child process isn't found.
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	if configVersion == configVersionV2 {
+		ctx = dynamicspan.WithRulePlan(ctx, rulePlan)
+	}
 	var opts []instrumenter.Option
 	if configVersion == configVersionV2 && configPath != nil && *configPath != "" && config.Enabled(obi.FeatureAppO11y) {
 		updater := discover.NewCriteriaUpdater(config)

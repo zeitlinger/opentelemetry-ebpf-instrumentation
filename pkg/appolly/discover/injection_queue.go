@@ -192,6 +192,31 @@ func (q *injectionQueue[T]) enqueue(target T) {
 	}
 }
 
+// enqueueUpdate applies backpressure for an authoritative runtime update so an
+// admitted replacement or clear cannot be silently dropped when the queue is full.
+func (q *injectionQueue[T]) enqueueUpdate(ctx context.Context, target T) bool {
+	if q.admits != nil && !q.admits(target) {
+		q.closeTarget(target, "rejected")
+		return false
+	}
+
+	q.mu.Lock()
+	if q.stopped {
+		q.mu.Unlock()
+		q.closeTarget(target, "dropped")
+		return false
+	}
+	select {
+	case q.targets <- target:
+		q.mu.Unlock()
+		return true
+	case <-ctx.Done():
+		q.mu.Unlock()
+		q.closeTarget(target, "cancelled")
+		return false
+	}
+}
+
 // wait joins the worker. An injection still deciding whether to proceed
 // observes the cancelled context and returns; one that has already reached its
 // target runs on its own deadlines, and this waits for them.

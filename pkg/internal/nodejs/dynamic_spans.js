@@ -5,12 +5,13 @@
   'use strict';
 
   const injectedRules = __OBI_DYNAMIC_SPAN_RULES__;
-  if (!Array.isArray(injectedRules) || injectedRules.length === 0) return;
+  if (!Array.isArray(injectedRules)) return;
 
   const stateKey = Symbol.for('obi.dynamicSpanState');
   const existingState = globalThis[stateKey];
   if (existingState) {
-    if (existingState.addRules(injectedRules)) existingState.rescan();
+    existingState.replaceRules(injectedRules);
+    existingState.rescan();
     return;
   }
 
@@ -23,16 +24,19 @@
   const wrappedOriginals = new WeakMap();
   let scannedModules = new WeakMap();
   const diagnosedRules = new Set();
+  let rulesGeneration = 0;
+  let rulesSignature = '';
   const state = {};
   globalThis[stateKey] = state;
-  state.addRules = (newRules) => {
-    let changed = false;
-    for (const rule of newRules) {
-      if (rules.some((existing) => existing.name === rule.name && existing.reference === rule.reference)) continue;
-      rules.push(rule);
-      changed = true;
+  state.replaceRules = (newRules) => {
+    const signature = JSON.stringify(newRules);
+    if (signature !== rulesSignature) {
+      rules.length = 0;
+      for (const rule of newRules) rules.push(rule);
+      rulesSignature = signature;
+      rulesGeneration++;
+      diagnosedRules.clear();
     }
-    return changed;
   };
   const diagnose = (index, message, err) => {
     if (diagnosedRules.has(index)) return;
@@ -135,17 +139,22 @@
     const currentDescriptor = Object.getOwnPropertyDescriptor(target.parent, target.key);
     if (!currentDescriptor || !Object.prototype.hasOwnProperty.call(currentDescriptor, 'value')) return false;
     if (wrappedFunctions.has(currentDescriptor.value)) {
-      const names = wrappedFunctions.get(currentDescriptor.value);
-      if (!names.includes(rule.name)) names.push(rule.name);
+      const metadata = wrappedFunctions.get(currentDescriptor.value);
+      if (metadata.generation !== rulesGeneration) {
+        metadata.generation = rulesGeneration;
+        metadata.names.length = 0;
+      }
+      if (!metadata.names.includes(rule.name)) metadata.names.push(rule.name);
       return true;
     }
     target = { ...target, descriptor: currentDescriptor, original: currentDescriptor.value };
     const original = target.original;
-    const spanNames = [];
+    const metadata = { generation: rulesGeneration, names: [] };
     const invokeWithSpans = (invoke) => {
+      if (metadata.generation !== rulesGeneration) return invoke();
       const invokeAt = (index) => {
-        if (index === spanNames.length) return invoke();
-        return withSpan(spanNames[index], () => invokeAt(index + 1), undefined, []);
+        if (index === metadata.names.length) return invoke();
+        return withSpan(metadata.names[index], () => invokeAt(index + 1), undefined, []);
       };
       return invokeAt(0);
     };
@@ -157,7 +166,7 @@
         return invokeWithSpans(() => Reflect.construct(fn, args, newTarget === wrapper ? fn : newTarget));
       },
     });
-    wrappedFunctions.set(wrapper, spanNames);
+    wrappedFunctions.set(wrapper, metadata);
     wrappedOriginals.set(wrapper, original);
     target.descriptor.value = wrapper;
     try {
@@ -165,7 +174,7 @@
     } catch (_) {
       return false;
     }
-    if (!spanNames.includes(rule.name)) spanNames.push(rule.name);
+    if (!metadata.names.includes(rule.name)) metadata.names.push(rule.name);
     return true;
   };
 
@@ -219,7 +228,7 @@
       }
     }
   };
-  state.addRules(injectedRules);
+  state.replaceRules(injectedRules);
   state.rescan = () => {
     scannedModules = new WeakMap();
     loadedBuiltins.clear();

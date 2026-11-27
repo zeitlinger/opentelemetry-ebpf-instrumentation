@@ -500,7 +500,7 @@
         },
         "spans/development": {
           "type": "array",
-          "description": "Experimental dynamic span declarations scoped to this capture rule. Opt in by supplying a non-empty list on an include rule; omitted or empty lists disable dynamic spans. Startup-only: any configuration refresh while experimental spans are configured in either the current or next configuration requires restarting OBI.",
+          "description": "Experimental dynamic span declarations scoped to this capture rule. Opt in by supplying a non-empty list on an include rule. Omitted or empty lists disable dynamic spans. For supported, compatible Java and Node.js agents already running under OBI, refreshing the configuration file can add, replace, or clear dynamic span rules without restarting OBI or the workload. Refresh does not undo completed spans or change spans already in flight. Unsupported or incompatible agents might not be updated, and not every function reference can necessarily be wrapped. The Collector continues to use its startup configuration. This file refresh does not add a Collector configuration refresh mechanism.",
           "items": {"$ref": "#/$defs/ExperimentalDynamicSpanSpec"}
         },
         "http": {

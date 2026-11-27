@@ -236,6 +236,7 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 	next.observed = maps.Clone(m.observed)
 	next.Criteria = update.Include
 	next.ExcludeCriteria = update.Exclude
+	next.dynamicSpans = spansBySelector(update.Include, dynamicspan.RulePlanFromContext(update.Context), next.targetPIDs)
 	if update.SamplerConfig != nil {
 		next.samplerConfig = update.SamplerConfig
 	}
@@ -251,6 +252,8 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 	}
 
 	var events []Event[ProcessMatch]
+	spanUpdatePIDs := map[app.PID]bool{}
+	samplerUpdatePIDs := map[app.PID]bool{}
 	var conflictingPID app.PID
 	var hasConflict bool
 	for pid, previous := range m.ProcessHistory {
@@ -264,13 +267,18 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 				}
 				hasConflict = true
 			}
-			if !reflect.DeepEqual(samplingConfig(previous), samplingConfig(replacement)) {
+			samplerChanged := !reflect.DeepEqual(samplingConfig(previous), samplingConfig(replacement))
+			spansChanged := !slices.Equal(m.dynamicSpansFor(previous.Criteria), next.dynamicSpansFor(replacement.Criteria))
+			if samplerChanged || spansChanged {
 				events = append(events, Event[ProcessMatch]{Type: EventUpdated, Obj: replacement})
+				spanUpdatePIDs[pid] = spansChanged
+				samplerUpdatePIDs[pid] = samplerChanged
 			}
 			continue
 		}
 
 		events = append(events, Event[ProcessMatch]{Type: EventDeleted, Obj: previous})
+		spanUpdatePIDs[pid] = len(m.dynamicSpansFor(previous.Criteria)) > 0
 	}
 	if hasConflict {
 		// A stable PID keeps retries of the same rejection from bypassing log deduplication.
@@ -309,10 +317,29 @@ func (m *Matcher) refresh(ctx context.Context, update services.CriteriaUpdate) e
 	m.observed = next.observed
 	m.Criteria = next.Criteria
 	m.ExcludeCriteria = next.ExcludeCriteria
+	m.dynamicSpans = next.dynamicSpans
 	m.samplerConfig = next.samplerConfig
 	m.ProcessHistory = next.ProcessHistory
 
 	if len(events) > 0 {
+		if m.spanHandoff != nil {
+			for i := range events {
+				event := &events[i]
+				switch event.Type {
+				case EventCreated:
+					m.spanHandoff.putMatch(&event.Obj, next.dynamicSpansFor(event.Obj.Criteria), false, false)
+				case EventUpdated:
+					if spanUpdatePIDs[event.Obj.Process.Pid] {
+						m.spanHandoff.putMatch(&event.Obj, next.dynamicSpansFor(event.Obj.Criteria), true,
+							samplerUpdatePIDs[event.Obj.Process.Pid])
+					}
+				case EventDeleted:
+					if spanUpdatePIDs[event.Obj.Process.Pid] {
+						m.spanHandoff.putMatch(&event.Obj, nil, true, false)
+					}
+				}
+			}
+		}
 		m.Output.SendCtx(ctx, events)
 	}
 
@@ -410,9 +437,6 @@ func refreshableCriteria(cfg *obi.Config) []services.Selector {
 
 // Definitions may be added, removed or reordered, but existing service settings cannot be replaced.
 func compatibleDefinitions(current, next []services.Selector) error {
-	if selectorsHaveDynamicSpans(current) || selectorsHaveDynamicSpans(next) {
-		return errors.New("configuration with dynamic spans cannot be refreshed; restart OBI to apply it")
-	}
 	if !definitionsKeepSettings(current, next) {
 		return errors.New("service settings changed in discovery definitions; restart OBI to apply this configuration")
 	}
@@ -451,15 +475,6 @@ func compatibleDefinitions(current, next []services.Selector) error {
 	}
 
 	return nil
-}
-
-func selectorsHaveDynamicSpans(selectors []services.Selector) bool {
-	for _, selector := range selectors {
-		if len(dynamicspan.ForSelector(selector)) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func predicateKey(selector services.Selector) (string, error) {

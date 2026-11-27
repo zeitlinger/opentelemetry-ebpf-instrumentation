@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pipeline"
 
+	"go.opentelemetry.io/obi/internal/config/dynamicspan"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/instrumenter"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -21,13 +22,14 @@ import (
 // sharedController manages an OBI instance that can be shared between
 // traces, metrics, and logs receivers with the same component ID.
 type sharedController struct {
-	mu      sync.Mutex
-	config  *obi.Config
-	v2      bool
-	cancel  context.CancelFunc
-	refCnt  int // Number of active receivers using this controller
-	runErr  error
-	runDone chan struct{}
+	mu       sync.Mutex
+	config   *obi.Config
+	v2       bool
+	spanPlan dynamicspan.RulePlan
+	cancel   context.CancelFunc
+	refCnt   int // Number of active receivers using this controller
+	runErr   error
+	runDone  chan struct{}
 }
 
 // Controller represents an individual receiver (traces, metrics, or logs) that
@@ -54,7 +56,7 @@ var (
 // NewController creates a new Controller for the given component ID and config.
 // Receivers with the same component ID share the same underlying OBI instance.
 // Receivers with different component IDs get separate OBI instances.
-func NewController(id component.ID, cfg *obi.Config, v2 bool, signal pipeline.Signal) (*Controller, error) {
+func NewController(id component.ID, cfg *obi.Config, v2 bool, spanPlan dynamicspan.RulePlan, signal pipeline.Signal) (*Controller, error) {
 	sharedControllersMu.Lock()
 	defer sharedControllersMu.Unlock()
 
@@ -62,8 +64,9 @@ func NewController(id component.ID, cfg *obi.Config, v2 bool, signal pipeline.Si
 	shared, exists := sharedControllers[id]
 	if !exists {
 		shared = &sharedController{
-			config: cfg,
-			v2:     v2,
+			config:   cfg,
+			v2:       v2,
+			spanPlan: spanPlan,
 		}
 		sharedControllers[id] = shared
 	} else {
@@ -123,6 +126,7 @@ func (c *Controller) Start(ctx context.Context, _ component.Host) error {
 	// First caller - start OBI. The Start context only covers startup, so OBI
 	// runs on its own context, which Shutdown cancels.
 	runCtx, cancel := context.WithCancel(context.Background())
+	runCtx = dynamicspan.WithRulePlan(runCtx, c.shared.spanPlan)
 	ctxInfo, err := instrumenter.BuildCommonContextInfo(runCtx, c.shared.config)
 	if err != nil {
 		cancel()

@@ -33,12 +33,21 @@ func TestFindingCriteriaPreservesDynamicSpansAcrossMixedTargetClone(t *testing.T
 			Instrument: services.GlobDefinitionCriteria{{Path: services.NewGlob("/srv/app")}},
 		},
 	}
-	dynamicspan.RegisterSelector(&cfg.Discovery.Instrument[0], spans)
-
 	criteria := FindingCriteria(cfg)
 	require.Len(t, criteria, 2)
-	assert.Equal(t, spans, dynamicspan.ForSelector(criteria[0]))
-	assert.Empty(t, dynamicspan.ForSelector(criteria[1]))
+	bySelector := spansBySelector(criteria, dynamicspan.RulePlan{Glob: [][]dynamicspan.Span{spans}}, false)
+	assert.Equal(t, spans, bySelector[criteria[0]])
+	assert.Empty(t, bySelector[criteria[1]])
+
+	handoff := newDynamicSpanHandoff()
+	output := msg.NewQueue[[]Event[ProcessMatch]](msg.ChannelBufferLen(1))
+	matcher := Matcher{dynamicSpans: bySelector, spanHandoff: handoff, Output: output}
+	created := []Event[ProcessMatch]{{Type: EventCreated, Obj: ProcessMatch{Criteria: []services.Selector{criteria[0]}}}}
+	matcher.sendMatches(t.Context(), created)
+	target, ok := handoff.takeMatch(&created[0].Obj)
+	require.True(t, ok)
+	assert.Equal(t, spans, target.spans, "new attachments must receive the matched rule's initial spans")
+	assert.False(t, target.update)
 }
 
 // TestMatchersMutuallyExclusive wires CriteriaMatcher + DynamicMatcher like ProcessFinder.Start.

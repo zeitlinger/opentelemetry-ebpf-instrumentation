@@ -4,17 +4,18 @@
 
 Experimental dynamic span declarations are configured per capture rule under
 `capture.rules[].refine.spans/development`. A non-empty list on an include
-rule opts in; an omitted or empty list leaves dynamic spans off. This experimental
+rule opts in. An omitted or empty list leaves dynamic spans off. This experimental
 setting keeps each declaration alongside the workload selection it refines.
-This is startup-only: any configuration refresh while experimental spans are
+This is startup-only. Any configuration refresh while experimental spans are
 configured in either the current or next configuration requires restarting OBI.
 A span has a name, exactly one target under
 `on`, and optional `attributes` mappings. The schema reserves the target keys
-`function`, `function_noret`, `usdt`, and `usdt_noret`; currently, the Java and
-Node.js runtime adapters accept only `on.function`. They do not support explicit
-attributes or automatic attribute capture. `function_noret` and both USDT forms
-are reserved schema shapes, not runtime-supported targets. No Go runtime
-implementation is in scope for this experimental feature.
+`function`, `function_noret`, `usdt`, and `usdt_noret`. Currently, the Java and
+Node.js runtime adapters accept only `on.function`. They reject explicit
+attribute mappings and `automatic_attributes: true`, but accept
+`automatic_attributes: false`. `function_noret` and both USDT forms are reserved
+schema shapes, not runtime-supported targets. No Go runtime implementation is
+in scope for this experimental feature.
 
 `function` and `function_noret` identify function targets; `usdt` and
 `usdt_noret` identify USDT targets. The key selects the target family and
@@ -42,18 +43,17 @@ application itself, can create a separate span for that work. This policy
 applies to dynamic function spans; it does not define the lifecycle of
 application-created spans or protocol spans.
 
-The schema also describes optional attribute mappings and automatic capture;
-these are not currently accepted by the Java or Node.js adapters. Each
-`attributes` entry names a span attribute and has an `argument` object.
+The schema also describes optional attribute mappings and automatic capture.
+Each `attributes` entry names a span attribute and has an `argument` object.
 `argument.index` selects the zero-based source argument (0 through 11), and
 optional `argument.type` describes that same argument using an OBI-defined
 decoding hint: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`, or
 `string`. These hints are not language-specific types and do not configure the
 output OpenTelemetry attribute type. The `automatic_attributes` boolean opts
-into automatic argument/result capture; it defaults to `false`. When enabled,
+into automatic argument/result capture. It defaults to `false`. When enabled,
 explicit mappings take precedence over automatically captured attributes with
-the same key; the automatic value is omitted. Spans may be declared only on
-include rules; parsing rejects non-empty spans under exclude rules. Nested object
+the same key. The automatic value is omitted. Spans may be declared only on
+include rules. Parsing rejects non-empty spans under exclude rules. Nested object
 extraction is not supported by this configuration.
 
 Malformed shared declaration structure is a configuration error. Runtime
@@ -66,12 +66,13 @@ in its runtime reference.
 The schema describes a shared contract, not support in every runtime. Each
 runtime documents its accepted function syntax, target types, and attributes in
 its runtime-specific reference. Shared conversion validates declaration
-structure and common support constraints; the selected runtime parses its
+structure and common support constraints. The selected runtime parses its
 selector syntax and resolves targets at the runtime boundary.
 
-The following Java runtime example uses the currently supported `on.function`
-form. It omits attributes, which are not currently supported by the Java or
-Node.js adapters.
+The following is an illustrative schema example. It shows fields beyond the
+currently supported `on.function` form and is not a valid Java or Node.js
+runtime configuration. Those adapters reject explicit attribute mappings and
+`automatic_attributes: true`, but accept `automatic_attributes: false`.
 
 ```yaml
 capture:
@@ -86,4 +87,8 @@ capture:
           - name: checkout.place_order
             on:
               function: "com.example.Checkout#placeOrder"
+            attributes:
+              - name: order.id
+                argument: {index: 0, type: string}
+            automatic_attributes: false
 ```

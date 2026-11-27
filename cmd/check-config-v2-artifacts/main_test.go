@@ -61,7 +61,7 @@ func TestSelectionRuleSpansSchema(t *testing.T) {
 		wantErr                 bool
 	}{
 		{name: "include with spans", action: "include", refineKey: "spans/development", spans: []any{map[string]any{"name": "custom", "on": map[string]any{"function": "example.Func"}}}},
-		{name: "legacy unsuffixed key", action: "include", refineKey: "spans", spans: []any{}, wantErr: true},
+		{name: "rejects the unsuffixed key", action: "include", refineKey: "spans", spans: []any{}, wantErr: true},
 		{name: "exclude with empty spans", action: "exclude", refineKey: "spans/development", spans: []any{}},
 		{name: "exclude with spans", action: "exclude", refineKey: "spans/development", spans: []any{map[string]any{"name": "custom", "on": map[string]any{"function": "example.Func"}}}, wantErr: true},
 	} {
